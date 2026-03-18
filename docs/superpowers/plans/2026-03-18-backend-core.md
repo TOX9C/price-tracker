@@ -6,7 +6,7 @@
 
 **Architecture:** Express.js REST API with PostgreSQL database. Monolithic structure with clear separation: routes → controllers → services → repositories. JWT-based authentication with bcrypt password hashing.
 
-**Tech Stack:** Node.js 20+, Express, TypeScript, PostgreSQL (pg driver), Zod validation, Jest for testing.
+**Tech Stack:** Node.js 20+, Express, TypeScript (ESM), PostgreSQL (pg driver), Zod validation, Jest for testing. **Note on JWT:** Using HS256 (symmetric) for simplicity in Phase 1. RS256 can be added in a later phase if needed for enhanced security.
 
 ---
 
@@ -66,16 +66,18 @@ price-tracker/
 - Create: `.env.example`
 - Create: `.gitignore`
 
-- [ ] **Step 1: Initialize package.json**
+- [ ] **Step 1: Initialize package.json with ESM**
 ```bash
 cd /Users/apollo/Documents/github/price-tracker
 npm init -y
+# Add type: "module" for ESM support
+node -e "const p=require('./package.json');p.type='module';require('fs').writeFileSync('package.json',JSON.stringify(p,null,2))"
 ```
 
 - [ ] **Step 2: Install dependencies**
 ```bash
 npm install express pg zod bcrypt jsonwebtoken dotenv helmet cors express-rate-limit pino
-npm install -D typescript @types/node @types/express @types/pg @types/bcrypt @types/jsonwebtoken jest @types/jest ts-jest @types/cors nodemon
+npm install -D typescript @types/node @types/express @types/pg @types/bcrypt @types/jsonwebtoken jest @types/jest ts-jest @types/cors tsx
 ```
 
 - [ ] **Step 3: Create tsconfig.json**
@@ -125,15 +127,16 @@ coverage/
 ```json
 {
   "scripts": {
-    "dev": "nodemon src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "db:migrate": "psql -d pricehawk -f src/db/migrations/001_initial_schema.sql"
   }
 }
 ```
+Note: Using `tsx watch` for fast TypeScript execution. Added `--experimental-vm-modules` for Jest ESM support.
 
 - [ ] **Step 7: Commit**
 ```bash
@@ -1331,6 +1334,12 @@ export const authController = {
       next(error);
     }
   },
+
+  async logout(_req: Request, res: Response, _next: NextFunction): Promise<void> {
+    // JWT is stateless, so logout is just client-side token removal
+    // In a future phase, we can add token blacklisting for enhanced security
+    res.status(204).send();
+  },
 };
 ```
 
@@ -1474,6 +1483,22 @@ export const itemsController = {
       next(error);
     }
   },
+
+  async manualCheck(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = (req as AuthRequest).userId;
+      const { id } = req.params as { id: string };
+      // Note: Phase 2 will implement actual price checking
+      // For now, return a placeholder response
+      res.json({
+        message: 'Price check queued',
+        itemId: id,
+        note: 'Price extraction will be implemented in Phase 2',
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
 };
 ```
 
@@ -1524,6 +1549,11 @@ router.post('/login',
 router.post('/refresh',
   requireAuth,
   authController.refresh
+);
+
+router.post('/logout',
+  requireAuth,
+  authController.logout
 );
 
 export default router;
@@ -1578,6 +1608,13 @@ router.post('/:id/urls',
 router.delete('/:id/urls/:urlId',
   itemsController.validateParams,
   itemsController.removeUrl
+);
+
+// Manual price check (throttled - 1 per hour per item)
+// Note: Full price checking logic will be implemented in Phase 2
+router.post('/:id/check',
+  itemsController.validateParams,
+  itemsController.manualCheck
 );
 
 export default router;
