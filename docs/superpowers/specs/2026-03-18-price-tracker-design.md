@@ -1,7 +1,7 @@
 # PriceHawk - Price Tracking App Design
 
 **Date:** 2026-03-18
-**Status:** Approved for Implementation
+**Status:** Under Review
 
 ## Overview
 
@@ -37,6 +37,73 @@ PriceHawk is a price tracking application that monitors e-commerce prices and no
 - Email notifications via Resend or SendGrid
 - Push notifications via Expo Push API
 
+## Security
+
+### Authentication Security
+- **Password Hashing:** bcrypt with cost factor 12
+- **Session Tokens:** JWT with 7-day expiration, signed with RS256
+- **Rate Limiting:** Auth endpoints limited to 5 attempts per minute per IP
+- **Token Refresh:** Refresh tokens with 30-day expiration, stored in httpOnly cookie
+
+### API Security
+- **Internal Endpoints:** Protected by API key passed in `X-Internal-Key` header
+  - `/internal/check-prices` requires valid API key
+  - API key stored in environment variable, rotated monthly
+- **Rate Limiting:** General API: 100 requests/minute per user
+- **CORS:** Whitelist only deployed domains (web app, mobile deep links)
+- **Helmet.js:** Security headers (CSP, HSTS, X-Frame-Options)
+- **HTTPS:** Enforced on all endpoints via Vercel/Railway TLS
+
+### Input Validation
+- **Library:** Zod for all request validation
+- **Sanitization:** DOMPurify for any user-provided HTML content
+- **SQL Injection:** Parameterized queries via pg driver (never string interpolation)
+- **XSS Prevention:** React's default escaping + Content Security Policy
+
+### Request Validation Schema Examples
+```typescript
+// POST /items validation
+const CreateItemSchema = z.object({
+  name: z.string().min(1).max(255),
+  urls: z.array(z.string().url()).min(1).max(5),
+  category: z.enum(['electronics', 'gaming', 'home', 'fashion', 'other']).optional(),
+  notificationThreshold: z.number().positive().optional()
+});
+```
+
+## Error Handling
+
+### HTTP Error Response Format
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "User-friendly message",
+    "details": { }
+  }
+}
+```
+
+### Error Codes
+- `VALIDATION_ERROR` (400) - Invalid input
+- `UNAUTHORIZED` (401) - Missing/invalid token
+- `FORBIDDEN` (403) - Valid token, wrong permissions
+- `NOT_FOUND` (404) - Resource doesn't exist
+- `RATE_LIMITED` (429) - Too many requests
+- `SCRAPING_FAILED` (502) - Could not extract price
+- `INTERNAL_ERROR` (500) - Unexpected server error
+
+### Scraping Error Handling
+- **Retry Logic:** 3 retries with exponential backoff (1s, 5s, 15s)
+- **Fallback:** If all retries fail, mark as `last_check_failed: true`
+- **User Notification:** Dashboard shows "Unable to check" status with retry button
+- **Graceful Degradation:** Show last known price with "(unavailable)" badge
+
+### User-Facing Error States
+- Network errors: "Unable to connect. Please check your connection."
+- Scraping errors: "Could not fetch price from this store. Try again later."
+- Duplicate URL: "You're already tracking this product."
+
 ## Data Model
 
 ### Tables
@@ -48,7 +115,14 @@ CREATE TABLE users (
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW(),
-  notification_preferences JSONB DEFAULT '{}'
+  notification_preferences JSONB DEFAULT '{
+    "email_enabled": true,
+    "push_enabled": true,
+    "notify_on_drop_percentage": 5,
+    "quiet_hours_start": null,
+    "quiet_hours_end": null
+  }',
+  deleted_at TIMESTAMP DEFAULT NULL
 );
 
 -- Items (user's tracked products)
@@ -58,7 +132,8 @@ CREATE TABLE items (
   name VARCHAR(255) NOT NULL,
   image_url TEXT,
   category VARCHAR(100),
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  deleted_at TIMESTAMP DEFAULT NULL
 );
 
 -- Tracked URLs (store links for each item)
@@ -68,8 +143,13 @@ CREATE TABLE tracked_urls (
   url TEXT NOT NULL,
   store_name VARCHAR(255),
   current_price DECIMAL(10, 2),
+  currency VARCHAR(3) DEFAULT 'USD',
+  availability VARCHAR(50) DEFAULT 'in_stock', -- in_stock, out_of_stock, hidden_price, unknown
   last_checked TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
+  last_check_failed BOOLEAN DEFAULT FALSE,
+  extraction_method VARCHAR(50), -- json_ld, selector, heuristic, manual
+  created_at TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT unique_item_url UNIQUE (item_id, url)
 );
 
 -- Price history
@@ -77,6 +157,8 @@ CREATE TABLE price_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tracked_url_id UUID REFERENCES tracked_urls(id) ON DELETE CASCADE,
   price DECIMAL(10, 2) NOT NULL,
+  currency VARCHAR(3) DEFAULT 'USD',
+  availability VARCHAR(50),
   checked_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -84,17 +166,18 @@ CREATE TABLE price_history (
 CREATE TABLE notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  type VARCHAR(50) NOT NULL,
+  type VARCHAR(50) NOT NULL, -- price_drop, back_in_stock, threshold_reached
   message TEXT NOT NULL,
+  data JSONB, -- { item_id, old_price, new_price, store }
   sent_at TIMESTAMP DEFAULT NOW(),
   read_at TIMESTAMP
 );
 
 -- Indexes
-CREATE INDEX idx_items_user ON items(user_id);
+CREATE INDEX idx_items_user ON items(user_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_tracked_urls_item ON tracked_urls(item_id);
-CREATE INDEX idx_price_history_url ON price_history(tracked_url_id, checked_at);
-CREATE INDEX idx_notifications_user ON notifications(user_id);
+CREATE INDEX idx_price_history_url ON price_history(tracked_url_id, checked_at DESC);
+CREATE INDEX idx_notifications_user ON notifications(user_id, read_at);
 ```
 
 ### Relationships
@@ -103,6 +186,11 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
 - Item has many tracked_urls (different stores for same product)
 - TrackedURL has many price_history entries
 - User has many notifications
+
+### Soft Deletes
+- `deleted_at` column on users and items
+- Queries filter out deleted records by default
+- Hard delete after 30 days via cleanup job
 
 ## Price Extraction
 
@@ -126,6 +214,18 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
    - Use heuristics: largest font price near title, lowest on page
    - Mark as low-confidence for manual review
 
+### Availability Handling
+- **In Stock:** Normal price tracking
+- **Out of Stock:** Mark availability, don't update price, notify user of restock
+- **Hidden Price:** ("Add to cart to see price") Mark as `hidden_price`, skip notification
+- **Unknown:** Extraction failed, show stale data with warning
+
+### Currency Handling
+- Primary: USD (normalize all prices to USD)
+- Store original currency alongside normalized price
+- Exchange rates fetched daily from open exchange rate API
+- User can set preferred display currency (future)
+
 ### Implementation
 
 - Use `cheerio` for HTML parsing
@@ -135,31 +235,50 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
 
 ## API Endpoints
 
+### API Versioning
+- All endpoints prefixed with `/api/v1/`
+- Version in URL for explicit versioning
+
+### Pagination
+- Cursor-based pagination for list endpoints
+- Query params: `cursor` (item ID), `limit` (default 20, max 50)
+- Response includes `next_cursor` and `has_more`
+
 ### Authentication
-- `POST /auth/register` - Create account
-- `POST /auth/login` - Start session
-- `POST /auth/logout` - End session
+- `POST /api/v1/auth/register` - Create account
+- `POST /api/v1/auth/login` - Start session
+- `POST /api/v1/auth/logout` - End session
+- `POST /api/v1/auth/refresh` - Refresh tokens
 
 ### Items
-- `GET /items` - List user's tracked items with best prices
-- `POST /items` - Add new item with URLs
-- `GET /items/:id` - Item detail with all store prices and history
-- `PUT /items/:id` - Update item name/category
-- `DELETE /items/:id` - Remove item and tracked URLs
+- `GET /api/v1/items?cursor=&limit=20` - List user's tracked items
+- `POST /api/v1/items` - Add new item with URLs
+- `GET /api/v1/items/:id` - Item detail with prices and history
+- `PUT /api/v1/items/:id` - Update item name/category
+- `DELETE /api/v1/items/:id` - Soft delete item
 
 ### Tracked URLs
-- `POST /items/:id/urls` - Add another store to existing item
-- `DELETE /items/:id/urls/:urlId` - Remove a store
-- `POST /items/:id/check` - Manual price check (throttled)
+- `POST /api/v1/items/:id/urls` - Add another store
+- `DELETE /api/v1/items/:id/urls/:urlId` - Remove a store
+- `POST /api/v1/items/:id/check` - Manual price check (throttled to 1/hour)
 
 ### Notifications
-- `GET /notifications` - List unread notifications
-- `POST /notifications/:id/read` - Mark as read
-- `PATCH /users/me/preferences` - Update notification settings
+- `GET /api/v1/notifications?cursor=&limit=20` - List notifications
+- `POST /api/v1/notifications/:id/read` - Mark as read
+- `PATCH /api/v1/users/me/preferences` - Update notification settings
 
-### Internal
-- `POST /internal/check-prices` - Cron-triggered scheduled checks
-- `GET /internal/health` - Health check endpoint
+### Internal (API Key Required)
+- `POST /api/v1/internal/check-prices` - Trigger scheduled checks
+- `GET /api/v1/internal/health` - Health check (public)
+- `GET /api/v1/internal/metrics` - Prometheus metrics (internal)
+
+### Rate Limits
+| Endpoint | Limit |
+|----------|-------|
+| POST /auth/* | 5/minute/IP |
+| GET /items | 60/minute/user |
+| POST /items | 10/minute/user |
+| POST /items/:id/check | 1/hour/item |
 
 ## Web UI
 
@@ -173,7 +292,7 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
 
 2. **Dashboard**
    - Grid of tracked items as cards
-   - Each card shows: image, name, best price, trend (up/down/flat), store, last checked
+   - Each card shows: image, name, best price, trend, store, last checked
    - Add Item button
    - Notification bell with unread count
 
@@ -217,17 +336,85 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
 - Last checked timestamp
 - Visual hierarchy: Price is largest, trend badge colorful (green/red), store and timestamp muted
 
+### Empty State
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ Your Items                                                           │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│                     [Illustration of price tag]                      │
+│                                                                      │
+│                     Start tracking prices                            │
+│                                                                      │
+│      Add your first item to get notified when prices drop.           │
+│                                                                      │
+│                        [+ Add Your First Item]                       │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Loading States
+- Dashboard: Skeleton cards with pulsing animation
+- Item detail: Skeleton chart, placeholder price boxes
+- Add flow: Spinner with "Checking price..." text
+
+### Error States
+- Failed scrape: Card shows last price with "(check failed)" badge, retry button
+- Network error: Toast notification "Connection lost. Retrying..."
+- Validation error: Inline field errors with red border
+
+### Responsive Design
+- Breakpoints: 640px (mobile), 1024px (tablet), 1280px (desktop)
+- Mobile: Single column, bottom nav instead of top nav
+- Tablet: 2-column grid
+- Desktop: 3-4 column grid
+
 ## Mobile UI
 
 ### Navigation
 - Tab bar: Dashboard | Add | Settings
 - No sidebar navigation
 
+### Mobile Dashboard
+
+```
+┌────────────────────────────┐
+│ PriceHawk        [Bell(3)] │
+├────────────────────────────┤
+│ Your Items        [+]      │
+├────────────────────────────┤
+│ ┌────────────────────────┐ │
+│ │ [Img] RTX 4090         │ │
+│ │       $1,599 ↓12%      │ │
+│ │       Best: Newegg     │ │
+│ └────────────────────────┘ │
+│ ┌────────────────────────┐ │
+│ │ [Img] iPhone 15 Pro    │ │
+│ │       $999 →0%         │ │
+│ │       Best: Apple      │ │
+│ └────────────────────────┘ │
+│                            │
+│  [Dashboard] [Add] [Setup] │
+└────────────────────────────┘
+```
+
+### Mobile Add Flow
+- **Step 1:** Full-screen with large URL input, camera icon for barcode scan
+- **Step 2:** Bottom sheet with scraped details, swipe down to cancel
+- **Step 3:** Success animation, auto-dismiss after 2s
+
+### Offline Handling
+- **Cache:** Last-seen data stored locally (AsyncStorage)
+- **Offline Indicator:** Banner shows "Offline - showing cached data"
+- **Queue Actions:** Add/remove items queued, synced on reconnect
+- **Pull to Refresh:** Triggers sync when online, shows "Offline" snackbar when not
+
 ### Differences from Web
-- Add flow optimized for mobile: camera/gallery image + paste URL
-- Swipe left on item to delete
+- Camera/gallery image + paste URL
+- Swipe left on item to delete (with confirmation)
 - Swipe right to manually check price
 - Bottom sheet for item details
+- Haptic feedback on notifications
 
 ### Shared Code
 - ~70% business logic shared via monorepo packages
@@ -238,8 +425,18 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
 
 ### Step 1: Paste URL
 - Simple modal with URL input
+- URL validation (valid format, reachable, supported protocol)
 - Continue button scrapes the URL
 - Shows loading state during scrape
+
+### URL Validation
+- Must be valid URL format (protocol required)
+- Must be reachable (HEAD request to verify)
+- If unsupported store: "This store isn't fully supported. Price may not be accurate. Continue?"
+
+### Duplicate Detection
+- Check if URL already exists for this user
+- If found: "You're already tracking this product." with link to existing item
 
 ### Step 2: Confirm Details
 - Auto-populated from scrape: image, name, price, store
@@ -247,10 +444,12 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
 - Category dropdown
 - Optional notification threshold
 - "Add Another URL" for multi-store tracking
+- Show availability status if out of stock
 
 ### Step 3: Success
 - Confirmation with current best price
 - Options to add another or view dashboard
+- If price significantly different from expected: warning badge
 
 ## Tech Stack
 
@@ -270,18 +469,64 @@ CREATE INDEX idx_notifications_user ON notifications(user_id);
 - **Scheduling:** node-cron
 - **Email:** Resend or SendGrid
 - **Push:** Expo Push API
+- **Validation:** Zod
+- **Logging:** Pino
 
 ### Deployment
 - **Web:** Vercel
 - **Backend + DB:** Railway or Render
 - **Mobile:** Apple App Store, Google Play Store
 
+## Observability
+
+### Logging
+- **Library:** Pino with structured JSON logs
+- **Levels:** error, warn, info, debug
+- **Fields:** timestamp, requestId, userId, endpoint, duration, statusCode
+- **Format:** JSON in production, pretty-print in development
+
+### Error Tracking
+- **Integration:** Sentry
+- **Capture:** Unhandled exceptions, failed scrapes, API errors
+- **Context:** User ID, item ID, URL being scraped
+
+### Metrics
+- **Scraping:** Success rate, latency per domain, retry count
+- **API:** Request rate, error rate, latency percentile (p50, p95, p99)
+- **Business:** Active users, items tracked, notifications sent
+
+### Alerting
+- Scraping success rate < 80%: Warning
+- Scraping success rate < 50%: Critical
+- API error rate > 5%: Warning
+- API latency p95 > 2s: Warning
+
+## Testing
+
+### Backend
+- **Unit:** Jest with supertest for API testing
+- **Mocking:** Mock cheerio responses for predictable scraping tests
+- **Coverage:** >80% coverage on business logic
+
+### Frontend (Web)
+- **Unit:** Vitest + React Testing Library
+- **E2E:** Playwright for critical user flows
+- **Coverage:** Component tests for all shared components
+
+### Frontend (Mobile)
+- **Unit:** Jest + React Native Testing Library
+- **E2E:** Detox for iOS/Android flows
+
+### Integration Tests
+- Docker Compose for local PostgreSQL
+- Test against real DB for auth and item flows
+- Scraping tests use recorded HTML fixtures
+
 ## Future Considerations
 
 - Proxy/rotating IP service for scaling scraping
 - Browser extension for one-click tracking
 - Price prediction using ML
-- Browser extension for easier tracking
 - Wishlist sharing
 - Price alerts for specific thresholds
 - Historical price comparisons across retailers
