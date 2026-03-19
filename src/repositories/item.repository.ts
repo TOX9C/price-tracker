@@ -129,6 +129,13 @@ export const itemRepository = {
     };
   },
 
+  async findByIdInternal(itemId: string): Promise<{ id: string; user_id: string; name: string } | null> {
+    return queryOne<{ id: string; user_id: string; name: string }>(
+      `SELECT id, user_id, name FROM items WHERE id = $1 AND deleted_at IS NULL`,
+      [itemId]
+    );
+  },
+
   async addUrl(
     itemId: string,
     url: string,

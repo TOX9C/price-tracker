@@ -11,7 +11,7 @@ export interface UrlToCheck {
 
 export interface PriceUpdate {
   trackedUrlId: string;
-  price: number;
+  price: number | null;
   currency: string | null;
   availability: 'in_stock' | 'out_of_stock' | 'hidden_price' | 'unknown';
   extractionMethod: string;

@@ -8,7 +8,6 @@ export interface HeuristicResult {
 interface PriceCandidate {
   price: number;
   weight: number;
-  element: cheerio.Element;
 }
 
 const PRICE_REGEX = /\$[\d,]+\.?\d*|[\d,]+\.?\d*\s*(?:USD|dollars)/gi;
@@ -76,7 +75,7 @@ export function extractHeuristic(html: string): HeuristicResult | null {
         weight += WEIGHTS.ARIA_LABEL_CONTAINS_PRICE;
       }
 
-      candidates.push({ price, weight, element });
+      candidates.push({ price, weight });
     }
   });
 
