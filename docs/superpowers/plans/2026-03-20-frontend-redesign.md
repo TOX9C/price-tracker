@@ -74,7 +74,7 @@ Replace lines 8-28 with:
 
 - [ ] **Step 3: Update dark mode variables**
 
-Replace lines 31-50 with:
+Replace the `.dark` block with:
 ```css
 .dark {
   --background: 20 14% 10%;
@@ -101,7 +101,7 @@ Replace lines 31-50 with:
 
 - [ ] **Step 4: Add user-select utility and headline styles**
 
-Add after line 63 (before closing `}`):
+Add after the `h1, h2, h3, h4, h5, h6` selector block, before the closing brace:
 ```css
   .select-none {
     user-select: none;
@@ -138,9 +138,9 @@ git commit -m "feat(web): update CSS variables to amber palette, add font weight
 **Files:**
 - Modify: `web/tailwind.config.js`
 
-- [ ] **Step 1: Add success color and shadows**
+- [ ] **Step 1: Add success color, shadows, and border radius**
 
-Replace the `theme.extend` section (lines 9-54) with:
+Replace the `theme.extend` section with:
 ```js
   theme: {
     extend: {
@@ -189,14 +189,19 @@ Replace the `theme.extend` section (lines 9-54) with:
         },
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        sm: '6px',
+        md: '8px',
+        lg: '10px',
+        xl: '12px',
+        '2xl': '16px',
       },
       boxShadow: {
-        'card': '0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)',
+        sm: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+        md: '0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)',
+        lg: '0 4px 16px rgba(245,158,11,0.3)',
+        card: '0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)',
         'card-hover': '0 4px 8px rgba(0,0,0,0.08), 0 16px 48px rgba(0,0,0,0.06)',
-        'glow': '0 4px 16px rgba(245,158,11,0.3)',
+        glow: '0 4px 16px rgba(245,158,11,0.3)',
         'glow-lg': '0 6px 24px rgba(245,158,11,0.4)',
       },
     },
@@ -212,7 +217,7 @@ Expected: Build succeeds
 
 ```bash
 git add web/tailwind.config.js
-git commit -m "feat(web): add success color and card shadows to Tailwind config"
+git commit -m "feat(web): add success color, shadows, and border radius to Tailwind config"
 ```
 
 ---
@@ -224,7 +229,7 @@ git commit -m "feat(web): add success color and card shadows to Tailwind config"
 
 - [ ] **Step 1: Add gradient primary variant**
 
-Replace the `buttonVariants` definition (lines 7-34) with:
+Replace the `buttonVariants` definition with:
 ```tsx
 const buttonVariants = cva(
   "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -261,7 +266,7 @@ const buttonVariants = cva(
 
 - [ ] **Step 2: Update function signature**
 
-Replace the Button function (lines 36-55) with:
+Replace the Button function with:
 ```tsx
 function Button({
   className,
@@ -306,7 +311,7 @@ git commit -m "feat(web): add gradient primary button with glow shadow"
 
 - [ ] **Step 1: Add success variant**
 
-Replace the `badgeVariants` definition (lines 7-26) with:
+Replace the `badgeVariants` definition with:
 ```tsx
 const badgeVariants = cva(
   "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:ring-ring/50 select-none [&_svg]:pointer-events-none [&_svg]:size-3",
@@ -353,14 +358,14 @@ git commit -m "feat(web): add success variant for price badges"
 
 - [ ] **Step 1: Update Card component styling**
 
-Replace the Card function (lines 5-16) with:
+Replace the Card function with:
 ```tsx
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "rounded-2xl border border-slate-100 bg-card text-card-foreground shadow-card transition-all duration-200 hover:shadow-card-hover hover:-translate-y-1 select-none",
+        "rounded-2xl border border-stone-100 bg-card text-card-foreground shadow-card transition-all duration-200 hover:shadow-card-hover hover:-translate-y-1 select-none",
         className
       )}
       {...props}
@@ -388,7 +393,7 @@ git commit -m "feat(web): update card with new shadow and hover effects"
 **Files:**
 - Modify: `web/src/components/shared/item-card.tsx`
 
-- [ ] **Step 1: Update ItemCard styling**
+- [ ] **Step 1: Update ItemCard styling (NO EMOJIS)**
 
 Replace the entire file with:
 ```tsx
@@ -396,7 +401,7 @@ import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatPrice } from '@/lib/utils'
-import { ArrowDown, ArrowRight, ArrowUp } from 'lucide-react'
+import { ArrowDown, Package } from 'lucide-react'
 import type { Item } from '@/types'
 
 interface ItemCardProps {
@@ -409,7 +414,7 @@ export function ItemCard({ item }: ItemCardProps) {
   return (
     <Link to={`/items/${item.id}`}>
       <Card className="overflow-hidden cursor-pointer">
-        <div className="aspect-[4/3] bg-gradient-to-br from-slate-50 to-slate-100 relative">
+        <div className="aspect-[4/3] bg-gradient-to-br from-stone-50 to-stone-100 relative">
           {item.image_url ? (
             <img
               src={item.image_url}
@@ -418,7 +423,7 @@ export function ItemCard({ item }: ItemCardProps) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <span className="text-4xl text-slate-300">📦</span>
+              <Package className="w-12 h-12 text-stone-300" />
             </div>
           )}
           {item.category && (
@@ -429,7 +434,7 @@ export function ItemCard({ item }: ItemCardProps) {
         </div>
 
         <CardContent className="p-4 space-y-3">
-          <h3 className="font-semibold text-slate-900 dark:text-white truncate">
+          <h3 className="font-semibold text-stone-900 dark:text-white truncate">
             {item.name}
           </h3>
 
@@ -447,11 +452,11 @@ export function ItemCard({ item }: ItemCardProps) {
                 )}
               </>
             ) : (
-              <span className="text-slate-400 italic">No price yet</span>
+              <span className="text-stone-400 italic">No price yet</span>
             )}
           </div>
 
-          <div className="flex items-center justify-between text-sm text-slate-500">
+          <div className="flex items-center justify-between text-sm text-stone-500">
             {item.best_store && <span>Best: {item.best_store}</span>}
             <span>{item.url_count} {item.url_count === 1 ? 'store' : 'stores'}</span>
           </div>
@@ -478,7 +483,7 @@ Expected: Build succeeds
 
 ```bash
 git add web/src/components/shared/item-card.tsx
-git commit -m "feat(web): update item card with green price badges"
+git commit -m "feat(web): update item card with green price badges, use Package icon instead of emoji"
 ```
 
 ---
@@ -555,7 +560,7 @@ export function LandingPage() {
       {/* Navigation */}
       <nav className="border-b border-amber-100">
         <div className="container mx-auto px-4 flex items-center justify-between h-16">
-          <a href="/" className="text-2xl font-extrabold tracking-tight text-slate-900">
+          <a href="/" className="text-2xl font-extrabold tracking-tight text-stone-900 select-none">
             PriceHawk
           </a>
           <div className="flex items-center gap-4">
@@ -575,13 +580,13 @@ export function LandingPage() {
           <Badge variant="secondary" className="mb-6 bg-amber-100 text-amber-800 border-0">
             Track smarter, save bigger
           </Badge>
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-6 text-slate-900">
+          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-6 text-stone-900 select-none">
             Never miss a{' '}
             <span className="bg-gradient-to-r from-amber-500 to-amber-600 bg-clip-text text-transparent">
               price drop
             </span>
           </h1>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto mb-8">
+          <p className="text-xl text-stone-600 max-w-2xl mx-auto mb-8">
             Track prices across Amazon, Best Buy, Newegg, and more.
             Get notified instantly when prices drop.
           </p>
@@ -602,7 +607,7 @@ export function LandingPage() {
       <section id="features" className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight mb-4">
+            <h2 className="text-3xl font-bold tracking-tight mb-4 select-none">
               Everything you need to save money
             </h2>
           </div>
@@ -614,7 +619,7 @@ export function LandingPage() {
                     <f.icon className="w-6 h-6 text-amber-600" />
                   </div>
                   <h3 className="font-semibold mb-2">{f.title}</h3>
-                  <p className="text-sm text-slate-600">{f.description}</p>
+                  <p className="text-sm text-stone-600">{f.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -623,10 +628,10 @@ export function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="py-20 bg-slate-50">
+      <section id="pricing" className="py-20 bg-stone-50">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold tracking-tight mb-4">
+            <h2 className="text-3xl font-bold tracking-tight mb-4 select-none">
               Simple, transparent pricing
             </h2>
           </div>
@@ -640,7 +645,7 @@ export function LandingPage() {
                   <h3 className="font-semibold text-lg">{plan.name}</h3>
                   <div className="mt-2 mb-4">
                     <span className="text-4xl font-bold">{plan.price}</span>
-                    <span className="text-slate-500 ml-1">{plan.period}</span>
+                    <span className="text-stone-500 ml-1">{plan.period}</span>
                   </div>
                   <ul className="space-y-2 mb-6">
                     {plan.features.map((f) => (
@@ -666,14 +671,14 @@ export function LandingPage() {
       {/* CTA */}
       <section className="py-20 bg-gradient-to-r from-amber-500 to-amber-600">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-white mb-4">
+          <h2 className="text-3xl font-bold text-white mb-4 select-none">
             Start tracking prices today
           </h2>
           <p className="text-white/90 mb-8">
             Join thousands of smart shoppers saving with PriceHawk
           </p>
           <Link to="/register">
-            <Button size="lg" variant="secondary" className="gap-2 bg-white text-amber-600 hover:bg-slate-50">
+            <Button size="lg" variant="secondary" className="gap-2 bg-white text-amber-600 hover:bg-stone-50">
               Get Started Free <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
@@ -695,7 +700,7 @@ Expected: Build succeeds
 
 ```bash
 git add web/src/pages/landing/index.tsx
-git commit -m "feat(web): redesign landing page with warm amber theme"
+git commit -m "feat(web): redesign landing page with warm amber theme, no emojis"
 ```
 
 ---
@@ -705,12 +710,32 @@ git commit -m "feat(web): redesign landing page with warm amber theme"
 **Files:**
 - Modify: `web/src/pages/dashboard/index.tsx`
 
+Current file starts with:
+```tsx
+export function DashboardPage() {
+ const { items, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useItems()
+ const { setAddItemModalOpen } = useUIStore()
+
+ if (isLoading) {
+ return <DashboardSkeleton />
+ }
+
+ return (
+ <div className="space-y-6">
+```
+
 - [ ] **Step 1: Update dashboard background**
 
-Update line 18 to add background styling:
+Change:
 ```tsx
 return (
-  <div className="space-y-6 min-h-screen bg-gradient-to-b from-slate-50 to-white">
+ <div className="space-y-6">
+```
+
+To:
+```tsx
+return (
+ <div className="space-y-6 min-h-screen bg-gradient-to-b from-stone-50 to-white">
 ```
 
 - [ ] **Step 2: Verify page**
@@ -733,14 +758,25 @@ git commit -m "feat(web): add warm background to dashboard"
 - Modify: `web/src/pages/auth/login.tsx`
 - Modify: `web/src/pages/auth/register.tsx`
 
-- [ ] **Step 1: Update login page background**
+Current `login.tsx` Card (around line 20):
+```tsx
+<Card>
+ <CardHeader className="space-y-1">
+```
 
-In `login.tsx`, update the Card component styling (around line 20). Find the Card component and add warm styling:
+- [ ] **Step 1: Update login page**
+
+Change:
+```tsx
+<Card>
+```
+
+To:
 ```tsx
 <Card className="border-0 shadow-card">
 ```
 
-- [ ] **Step 2: Update register page background**
+- [ ] **Step 2: Update register page**
 
 In `register.tsx`, make the same change:
 ```tsx
@@ -766,9 +802,9 @@ git commit -m "feat(web): update auth pages with card shadows"
 **Files:**
 - Modify: `web/src/components/layout/header.tsx`
 
-- [ ] **Step 1: Remove any emoji from logo, add user-select**
+- [ ] **Step 1: Update logo styling**
 
-Find the logo link (around line 15) and ensure it's text-only with proper styling:
+Find the logo Link and update to:
 ```tsx
 <Link to="/dashboard" className="text-xl font-extrabold tracking-tight text-amber-600 select-none">
   PriceHawk
@@ -794,16 +830,16 @@ git commit -m "feat(web): update header logo styling"
 **Files:**
 - Modify: `web/src/components/layout/footer.tsx`
 
-- [ ] **Step 1: Simplify footer styling**
+- [ ] **Step 1: Update footer styling**
 
-Update the footer to have a clean white background with border:
+Update footer outer element:
 ```tsx
-<footer className="border-t border-slate-100 bg-white">
+<footer className="border-t border-stone-100 bg-white">
 ```
 
-And ensure the logo is text-only:
+And the logo:
 ```tsx
-<a href="/" className="text-lg font-extrabold tracking-tight text-amber-600">
+<a href="/" className="text-lg font-extrabold tracking-tight text-amber-600 select-none">
   PriceHawk
 </a>
 ```
@@ -840,7 +876,7 @@ Open browser and verify:
 1. Landing page has warm amber gradient background
 2. Primary buttons have amber gradient with glow
 3. Price badges are green with mint background
-4. No emojis in logo or UI
+4. No emojis anywhere in the UI (use Package icon for placeholders)
 5. Cards have subtle shadows and lift on hover
 6. No text selection on buttons and headings
 
@@ -863,4 +899,4 @@ This plan transforms the PriceHawk web UI with:
 4. **Updated typography** with weight 800 for headlines
 5. **Card hover animations** with lift and shadow
 6. **Text selection prevention** on interactive elements
-7. **No emojis** — text logo only
+7. **No emojis** — text logo and Package icon only
