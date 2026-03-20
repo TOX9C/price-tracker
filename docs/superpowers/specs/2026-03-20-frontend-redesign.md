@@ -17,70 +17,86 @@ Redesign the PriceHawk web application with a warm, premium aesthetic that feels
 
 ### Color Palette
 
-| Role | Light Mode | Usage |
-|------|------------|-------|
-| Primary (accent) | `#f59e0b` → `#d97706` (amber gradient) | CTAs, highlights, brand moments |
-| Primary solid | `#f59e0b` | Hover states, icons |
-| Primary dark | `#d97706` | Active states |
-| Background | `#ffffff` → `#fffbeb` (warm gradient) | Page backgrounds |
-| Surface | `#ffffff` | Cards, modals |
-| Surface muted | `#f5f5f4` | Hover states, placeholders |
-| Text primary | `#1c1917` | Headlines, body text |
-| Text secondary | `#78716c` | Descriptions, labels |
-| Text muted | `#a8a29e` | Timestamps, hints |
-| Border | `#e7e5e4` | Card borders, dividers |
-| Success | `#059669` | Price drops, savings badges |
-| Success background | `#dcfce7` | Badge backgrounds |
-| Success text | `#059669` | Positive price indicators |
+**Note:** Existing `index.css` uses HSL format. Hex values below must be converted to HSL for CSS variables. Use a color converter.
 
-### Dark Mode (Future)
+| Role | Light Mode | HSL Equivalent | Usage |
+|------|------------|----------------|-------|
+| Primary (button gradient) | `linear-gradient(135deg, #f59e0b, #d97706)` | N/A (gradient) | CTAs, buttons |
+| Primary solid | `#f59e0b` | `38 92% 50%` | Hover states, icons |
+| Primary dark | `#d97706` | `32 95% 44%` | Active states |
+| Background | `#ffffff` → `#fffbeb` (hero gradient) | `0 0% 100%` | Page backgrounds |
+| Surface | `#ffffff` | `0 0% 100%` | Cards, modals |
+| Surface muted | `#f5f5f4` | `30 10% 96%` | Hover states, placeholders |
+| Text primary | `#1c1917` | `20 14% 10%` | Headlines, body text |
+| Text secondary | `#78716c` | `20 8% 45%` | Descriptions, labels |
+| Text muted | `#a8a29e` | `20 6% 68%` | Timestamps, hints |
+| Border | `#e7e5e4` | `20 6% 90%` | Card borders, dividers |
+| Success | `#059669` | `152 95% 30%` | Price drops, savings badges |
+| Success background | `#dcfce7` | `145 90% 89%` | Badge backgrounds |
 
-| Role | Dark Mode |
-|------|-----------|
-| Primary | `#f59e0b` (unchanged) |
-| Background | `#1c1917` |
-| Surface | `#292524` |
-| Text primary | `#fafaf9` |
-| Text secondary | `#a8a29e` |
+### Future Considerations: Dark Mode
 
-(Note: Dark mode is out of scope for initial implementation but palette is defined)
+| Role | Dark Mode | HSL Equivalent |
+|------|-----------|----------------|
+| Primary | `#f59e0b` | `38 92% 50%` |
+| Background | `#1c1917` | `20 14% 10%` |
+| Surface | `#292524` | `20 10% 15%` |
+| Text primary | `#fafaf9` | `60 10% 98%` |
+| Text secondary | `#a8a29e` | `20 6% 68%` |
+
+(Note: Dark mode palette defined for future implementation; not in current scope)
 
 ### Typography
 
 **Font family:** Retain Outfit (headlines) and Plus Jakarta Sans (body) from existing design — these work well.
 
+**Font import update required:** Add weight 800 to Outfit import in `index.css`:
+```css
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
+```
+
 **Modifications:**
-- Headlines: Tighter letter-spacing (`-0.5px` to `-1px`), heavier weight (800)
+- Headlines: Tighter letter-spacing, heavier weight (800 for hero/H1)
 - Body: Slightly larger base (16px → 18px for hero text)
 - Prices: Tabular nums, semibold, colored green with background badge
 
 **Scale:**
 ```
-Hero: 48px / 800 / -1px tracking
-H1: 36px / 800 / -0.5px
-H2: 28px / 700
-H3: 20px / 600
-Body: 16px / 400
-Small: 14px / 500
-Badge: 11-13px / 600
+Hero: 48px / weight 800 / letter-spacing -1px
+H1: 36px / weight 800 / letter-spacing -0.5px
+H2: 28px / weight 700 / letter-spacing -0.25px
+H3: 20px / weight 600 / letter-spacing 0
+Body: 16px / weight 400 / letter-spacing 0
+Small: 14px / weight 500 / letter-spacing 0
+Badge: 11-13px / weight 600 / letter-spacing 0
 ```
 
 ### Shadows
 
-```css
---shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
---shadow-md: 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04);
---shadow-lg: 0 4px 16px rgba(245,158,11,0.3); /* Primary button glow */
+Add to `tailwind.config.js` under `theme.extend.boxShadow`:
+
+```js
+boxShadow: {
+  'sm': '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+  'md': '0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)',
+  'lg': '0 4px 16px rgba(245,158,11,0.3)', // Primary button glow
+  'card': '0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)',
+  'card-hover': '0 4px 8px rgba(0,0,0,0.08), 0 16px 48px rgba(0,0,0,0.06)',
+}
 ```
 
 ### Border Radius
 
-```css
---radius-sm: 6px;   /* Badges, small buttons */
---radius-md: 8px;   /* Buttons, inputs */
---radius-lg: 10px;  /* Large buttons */
---radius-xl: 12px;  /* Card internal elements */
---radius-2xl: 16px; /* Cards, modals */
+Add to `tailwind.config.js` under `theme.extend.borderRadius`:
+
+```js
+borderRadius: {
+  'sm': '6px',   // Badges, small buttons
+  'md': '8px',   // Buttons, inputs (default)
+  'lg': '10px',  // Large buttons
+  'xl': '12px',  // Card internal elements
+  '2xl': '16px', // Cards, modals
+}
 ```
 
 ## Components
@@ -198,16 +214,18 @@ Background: linear-gradient(180deg, #fffbeb 0%, #fefce8 30%, #ffffff 100%)
 
 | File | Changes |
 |------|---------|
-| `web/src/index.css` | Update CSS variables, add new utility classes |
-| `web/tailwind.config.js` | Update color palette, shadows, radius |
-| `web/src/pages/landing/index.tsx` | Redesign hero, features, pricing |
-| `web/src/pages/dashboard/index.tsx` | Update card layout styling |
-| `web/src/components/shared/item-card.tsx` | New card design with amber/green badges |
-| `web/src/components/ui/button.tsx` | Update button variants |
-| `web/src/components/layout/header.tsx` | Simplified nav, text logo |
-| `web/src/components/layout/footer.tsx` | Clean footer design |
-| `web/src/pages/auth/login.tsx` | Warm auth pages |
-| `web/src/pages/auth/register.tsx` | Warm auth pages |
+| `web/src/index.css` | Update font import (add weight 800), update CSS variables to amber palette |
+| `web/tailwind.config.js` | Update colors, add shadows, add border radius |
+| `web/src/pages/landing/index.tsx` | Redesign hero, features, pricing sections |
+| `web/src/pages/dashboard/index.tsx` | Update card layout and background styling |
+| `web/src/components/shared/item-card.tsx` | New card design with green price badges |
+| `web/src/components/ui/button.tsx` | Add primary gradient variant, update styles |
+| `web/src/components/ui/card.tsx` | Update default shadow and border styling |
+| `web/src/components/ui/badge.tsx` | Add success variant with green/mint colors |
+| `web/src/components/layout/header.tsx` | Simplified nav, text logo without emojis |
+| `web/src/components/layout/footer.tsx` | Clean footer with minimal design |
+| `web/src/pages/auth/login.tsx` | Warm background, updated button styles |
+| `web/src/pages/auth/register.tsx` | Warm background, updated button styles |
 
 ## Out of Scope
 
@@ -218,8 +236,9 @@ Background: linear-gradient(180deg, #fffbeb 0%, #fefce8 30%, #ffffff 100%)
 
 ## Success Criteria
 
-1. Landing page feels warm, premium, distinctive — not "AI generated"
-2. No text selection on buttons and interactive elements
-3. Price badges clearly communicate savings with green color
-4. Consistent spacing, shadows, and border radius throughout
-5. Smooth hover animations on cards and buttons
+1. **Color accuracy**: Primary buttons use exact gradient `linear-gradient(135deg, #f59e0b, #d97706)`, success badges use `#059669` with `#dcfce7` background
+2. **Text selection prevention**: All buttons, cards, nav items, and headlines have `user-select: none` (can be tested via Cypress/Playwright)
+3. **Animation timing**: Hover animations use 150-200ms `ease-out` transitions (can be verified in DevTools)
+4. **Font weight**: Outfit font imports weight 800 (verify network tab shows full font family)
+5. **Visual consistency**: All cards use `border-radius: 16px`, all shadows match spec values
+6. **No emojis**: Logo and all UI elements are text-only, no emoji characters
