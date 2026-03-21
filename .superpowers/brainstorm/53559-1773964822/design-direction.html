@@ -1,0 +1,80 @@
+<h2>Which design direction feels right for PriceHawk?</h2>
+<p class="subtitle">Pick the aesthetic that matches your vision — we'll build on that</p>
+
+<div class="cards">
+  <div class="card" data-choice="bold-modern" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0d9488 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 12px;">
+      <div style="background: linear-gradient(135deg, #14b8a6, #0d9488); padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 24px rgba(20,184,166,0.4);">
+        <span style="color: white; font-weight: 700; font-size: 18px;">PriceHawk</span>
+      </div>
+      <div style="color: rgba(255,255,255,0.9); font-size: 14px; text-align: center; max-width: 200px;">
+        Track prices. Save money. Never miss a deal.
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <div style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);">
+          <div style="color: #14b8a6; font-size: 20px; font-weight: 700;">$299</div>
+          <div style="color: rgba(255,255,255,0.6); font-size: 11px;">Best Price</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);">
+          <div style="color: #14b8a6; font-size: 20px; font-weight: 700;">-15%</div>
+          <div style="color: rgba(255,255,255,0.6); font-size: 11px;">Price Drop</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Bold & Modern</h3>
+      <p>Dark theme with vibrant teal accents, glassmorphism cards, strong shadows. Feels like a premium tech product.</p>
+      <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>High contrast, easy to read</li><li>Memorable, distinctive look</li><li>Great for price data display</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Dark mode by default</li><li>May feel "techy"</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="clean-premium" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(180deg, #fafafa 0%, #f5f5f4 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 12px;">
+      <div style="padding: 12px 24px;">
+        <span style="color: #1c1917; font-weight: 700; font-size: 20px; letter-spacing: -0.5px;">PriceHawk</span>
+      </div>
+      <div style="color: #57534e; font-size: 13px; text-align: center; max-width: 200px;">
+        Smart price tracking for smart shoppers
+      </div>
+      <div style="background: white; padding: 20px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06); margin-top: 8px; width: 160px;">
+        <div style="color: #22c55e; font-size: 28px; font-weight: 600;">$299</div>
+        <div style="color: #78716c; font-size: 12px; margin-top: 4px;">Amazon · <span style="color: #22c55e;">↓ 15%</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Clean & Premium</h3>
+      <p>Light, airy, lots of whitespace. Subtle shadows, refined typography. Feels like Stripe or Linear — elegant and trustworthy.</p>
+      <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Feels premium & trustworthy</li><li>Great readability</li><li>Universally appealing</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Less visually bold</li><li>Common SaaS look</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="vibrant-playful" onclick="toggleSelect(this)">
+    <div class="card-image" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fcd34d 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 12px;">
+      <div style="padding: 12px 24px;">
+        <span style="color: #1c1917; font-weight: 800; font-size: 20px;">PriceHawk</span>
+        <span style="display: inline-block; margin-left: 4px; font-size: 20px;">🦅</span>
+      </div>
+      <div style="color: #78350f; font-size: 13px; text-align: center; max-width: 200px; font-weight: 500;">
+        Spot deals. Grab savings. Fly away happy.
+      </div>
+      <div style="background: white; padding: 16px 24px; border-radius: 9999px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin-top: 8px; display: flex; align-items: center; gap: 12px;">
+        <span style="color: #059669; font-size: 24px; font-weight: 700;">$299</span>
+        <span style="background: #dcfce7; color: #059669; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600;">SAVE $45</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Vibrant & Playful</h3>
+      <p>Warm colors, rounded elements, fun micro-interactions. Feels approachable and exciting — like a deals app should.</p>
+      <div class="pros-cons" style="margin-top: 12px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Memorable & fun</li><li>Stands out from competitors</li><li>Great for consumer app</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>May feel less "enterprise"</li><li>Bolder color commitment</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,13 +1,12 @@
 import { Router } from 'express';
 import { itemsController } from '../controllers/items.controller.js';
 import { requireAuth } from '../middleware/auth.js';
-import { apiRateLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
 router.use(requireAuth);
-router.use(apiRateLimiter);
 
+// Item CRUD
 router.post('/',
   itemsController.validateCreate,
   itemsController.create
@@ -16,6 +15,17 @@ router.post('/',
 router.get('/',
   itemsController.validateList,
   itemsController.list
+);
+
+// Queue stats (must come before /:id routes)
+router.get('/queue/stats',
+  itemsController.getQueueStats
+);
+
+// Preview URL (must come before /:id routes)
+router.get('/preview',
+  itemsController.validatePreview,
+  itemsController.preview
 );
 
 router.get('/:id',
@@ -34,6 +44,18 @@ router.delete('/:id',
   itemsController.delete
 );
 
+// Price check queue
+router.post('/:id/check',
+  itemsController.validateParams,
+  itemsController.queueCheck
+);
+
+router.get('/:id/check/:jobId',
+  itemsController.validateJobParams,
+  itemsController.getCheckStatus
+);
+
+// URL management
 router.post('/:id/urls',
   itemsController.validateParams,
   itemsController.validateAddUrl,
@@ -43,11 +65,6 @@ router.post('/:id/urls',
 router.delete('/:id/urls/:urlId',
   itemsController.validateParams,
   itemsController.removeUrl
-);
-
-router.post('/:id/check',
-  itemsController.validateParams,
-  itemsController.manualCheck
 );
 
 export default router;

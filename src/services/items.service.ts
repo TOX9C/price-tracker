@@ -11,6 +11,7 @@ export interface CreateItemInput {
 export interface UpdateItemInput {
   name?: string;
   category?: string;
+  imageUrl?: string;
 }
 
 export interface AddUrlInput {

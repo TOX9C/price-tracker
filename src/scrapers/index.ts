@@ -11,11 +11,34 @@ export interface ScraperResult {
   confidence: 'high' | 'medium' | 'low';
   name?: string;
   image?: string;
+  blocked?: boolean;
 }
 
 export interface ScraperOptions {
   timeout?: number;
   retries?: number;
+}
+
+// Patterns that indicate we're being blocked or seeing a CAPTCHA
+const BLOCK_PATTERNS = [
+  /captcha/i,
+  /bot detect/i,
+  /access denied/i,
+  /blocked/i,
+  /cloudflare/i,
+  /challenge/i,
+  /verify.*human/i,
+  /automated.*access/i,
+  /api-services-support@amazon/i,
+  /opfcaptcha/i,
+];
+
+/**
+ * Check if the HTML content indicates a block or CAPTCHA
+ */
+function detectBlock(html: string): boolean {
+  const lowerHtml = html.toLowerCase();
+  return BLOCK_PATTERNS.some(pattern => pattern.test(lowerHtml));
 }
 
 /**
@@ -42,10 +65,23 @@ export async function scrapePrice(
       availability: 'unknown',
       extractionMethod: 'failed',
       confidence: 'low',
+      blocked: false,
     };
   }
 
   const html = fetchResult.html;
+
+  // Check for blocks/CAPTCHA
+  if (detectBlock(html)) {
+    return {
+      price: null,
+      currency: 'USD',
+      availability: 'unknown',
+      extractionMethod: 'failed',
+      confidence: 'low',
+      blocked: true,
+    };
+  }
 
   // Tier 1: JSON-LD extraction (high confidence)
   const jsonLdResult = extractJsonLd(html);
@@ -58,6 +94,7 @@ export async function scrapePrice(
       confidence: 'high',
       name: jsonLdResult.name,
       image: jsonLdResult.image,
+      blocked: false,
     };
   }
 
@@ -70,6 +107,7 @@ export async function scrapePrice(
       availability: 'unknown',
       extractionMethod: 'selectors',
       confidence: 'medium',
+      blocked: false,
     };
   }
 
@@ -82,6 +120,7 @@ export async function scrapePrice(
       availability: 'unknown',
       extractionMethod: 'heuristic',
       confidence: 'low',
+      blocked: false,
     };
   }
 
@@ -92,6 +131,7 @@ export async function scrapePrice(
     availability: 'unknown',
     extractionMethod: 'failed',
     confidence: 'low',
+    blocked: false,
   };
 }
 

@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { itemsService } from '../services/items.service.js';
+import { priceCheckService } from '../services/price-check.service.js';
 import { validateBody, validateParams, validateQuery } from '../middleware/validate.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { scrapePrice } from '../scrapers/index.js';
 
 const createItemSchema = z.object({
   name: z.string().min(1).max(255),
@@ -14,6 +16,7 @@ const createItemSchema = z.object({
 const updateItemSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   category: z.enum(['electronics', 'gaming', 'home', 'fashion', 'other']).optional(),
+  imageUrl: z.string().url().optional(),
 });
 
 const addUrlSchema = z.object({
@@ -25,17 +28,33 @@ const itemParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+const jobParamsSchema = z.object({
+  id: z.string().uuid(),
+  jobId: z.string(),
+});
+
 const listQuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.string().regex(/^\d+$/).optional(),
 });
+
+const previewQuerySchema = z.object({
+  url: z.string().url(),
+});
+
+interface ListQuery {
+  cursor?: string;
+  limit?: string;
+}
 
 export const itemsController = {
   validateCreate: validateBody(createItemSchema),
   validateUpdate: validateBody(updateItemSchema),
   validateAddUrl: validateBody(addUrlSchema),
   validateParams: validateParams(itemParamsSchema),
+  validateJobParams: validateParams(jobParamsSchema),
   validateList: validateQuery(listQuerySchema),
+  validatePreview: validateQuery(previewQuerySchema),
 
   async create(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -50,7 +69,8 @@ export const itemsController = {
   async list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = (req as AuthRequest).userId;
-      const { cursor, limit } = req.query as { cursor?: string; limit?: string };
+      const parsedQuery = (req as Request & { parsedQuery?: ListQuery }).parsedQuery;
+      const { cursor, limit } = parsedQuery || {};
       const result = await itemsService.getItems(
         userId,
         cursor,
@@ -121,13 +141,101 @@ export const itemsController = {
     }
   },
 
-  async manualCheck(req: Request, res: Response, next: NextFunction): Promise<void> {
+  /**
+   * Queue a price check for an item
+   * POST /items/:id/check
+   */
+  async queueCheck(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      const userId = (req as AuthRequest).userId;
       const { id } = req.params as { id: string };
+
+      const result = await priceCheckService.queueItemCheck(id, userId);
+
+      if (result.rateLimited) {
+        res.status(429).json({
+          error: {
+            code: 'RATE_LIMITED',
+            message: 'Too many price check requests',
+            retryAfter: result.retryAfter,
+          },
+        });
+        return;
+      }
+
       res.json({
         message: 'Price check queued',
         itemId: id,
-        note: 'Price extraction will be implemented in Phase 2',
+        jobs: result.jobs,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Get status of a price check job
+   * GET /items/:id/check/:jobId
+   */
+  async getCheckStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { jobId } = req.params as { jobId: string };
+
+      const status = await priceCheckService.getCheckStatus(jobId);
+
+      if (status.status === 'not_found') {
+        res.status(404).json({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Job not found',
+          },
+        });
+        return;
+      }
+
+      res.json(status);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Get queue statistics
+   * GET /items/queue/stats
+   */
+  async getQueueStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const stats = await priceCheckService.getStats();
+      res.json(stats);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Preview a URL - scrape without saving
+   * GET /items/preview?url=...
+   */
+  async preview(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const parsedQuery = (req as Request & { parsedQuery?: { url: string } }).parsedQuery;
+      const url = parsedQuery?.url;
+
+      if (!url) {
+        res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'URL is required' } });
+        return;
+      }
+
+      const result = await scrapePrice(url);
+      res.json({
+        name: result.name || null,
+        image: result.image || null,
+        price: result.price,
+        currency: result.currency,
+        store: new URL(url).hostname.replace('www.', '').split('.')[0],
+        availability: result.availability,
+        confidence: result.confidence,
+        blocked: result.blocked || false,
       });
     } catch (error) {
       next(error);

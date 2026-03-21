@@ -10,19 +10,43 @@ interface SiteSelector {
   patterns: RegExp[];
   selectors: string[];
   parsePrice: (text: string) => number | null;
+  priceValidator?: (price: number) => boolean;
 }
+
+// Minimum reasonable prices for common product categories (to filter out accessories/warranties)
+const PRICE_VALIDATORS = {
+  // Electronics typically cost at least $10
+  default: (price: number) => price >= 10 && price <= 10000,
+  // Premium electronics (laptops, consoles, phones) typically $100+
+  premium: (price: number) => price >= 100 && price <= 5000,
+};
 
 const SITE_SELECTORS: SiteSelector[] = [
   {
     patterns: [/amazon\.(com|co\.uk|de|fr|es|it|ca|com\.au)/i],
     selectors: [
+      // Primary price displays
       '.a-price .a-offscreen',
       '.a-price-whole',
       '#priceblock_ourprice',
       '#priceblock_dealprice',
       '#priceblock_saleprice',
+      '#priceblock_ourprice_lbl + .a-price .a-offscreen',
+      // New Amazon layout
       '.reinventPricePriceToPayMargin .a-offscreen',
       '#corePriceDisplay_feature_div .a-price .a-offscreen',
+      '#corePriceDisplay_desktop_feature_div .a-price .a-offscreen',
+      // Deal prices
+      '#priceblock_snsprice_Buybox .a-offscreen',
+      '#dealPrice .a-offscreen',
+      // Subscribe & Save
+      '#snsBasePrice .a-offscreen',
+      // Buy box prices
+      '#buybox .a-price .a-offscreen',
+      '#newBuyBoxPrice',
+      // Fallback - get price from aria-label
+      '[aria-label*="Price"]',
+      '[aria-label*="price"]',
     ],
     parsePrice: parseAmazonPrice,
   },
@@ -33,6 +57,9 @@ const SITE_SELECTORS: SiteSelector[] = [
       '.priceView-customer-price span',
       '.pricing-price__value',
       '[data-testid="pricing-price"]',
+      '.price-info .screenreader-only',
+      '.sr-only:contains("$")',
+      '[data-selenium="pricing-price"]',
     ],
     parsePrice: parseStandardPrice,
   },
@@ -42,6 +69,7 @@ const SITE_SELECTORS: SiteSelector[] = [
       '.price-current',
       '.price-current strong',
       '[data-testid="product-price"]',
+      '.price-widget-container .price',
     ],
     parsePrice: parseNeweggPrice,
   },
@@ -52,6 +80,9 @@ const SITE_SELECTORS: SiteSelector[] = [
       '[itemprop="price"]',
       '.price-characteristic',
       '[data-testid="price-wrap"] [data-testid="price"]',
+      '[data-testid="price-value"]',
+      'span[data-automation="price"]',
+      '[itemprop="price"]',
     ],
     parsePrice: parseStandardPrice,
   },
@@ -62,6 +93,8 @@ const SITE_SELECTORS: SiteSelector[] = [
       '[data-test="current-price"]',
       '.styles__PriceFontSize-sc-1nkrncp-1',
       '[itemprop="price"]',
+      'span[aria-label*="current price"]',
+      '[data-testid="current-price"]',
     ],
     parsePrice: parseStandardPrice,
   },
@@ -72,6 +105,7 @@ const SITE_SELECTORS: SiteSelector[] = [
       '.x-price-primary .ux-textspans',
       '#mm-saleDscPrc',
       '.display-price',
+      '[itemprop="price"]',
     ],
     parsePrice: parseStandardPrice,
   },
@@ -88,52 +122,39 @@ const SITE_SELECTORS: SiteSelector[] = [
 
 function parseAmazonPrice(text: string): number | null {
   // Amazon prices can be like "$1,234.56" or "CDN$ 1,234.56"
-  const cleaned = text.replace(/[A-Z]{3}\$\s*/g, '').replace(/[^0-9.,]/g, '');
-  return parsePriceValue(cleaned);
+  // Also handle prices like "$1,234" (no decimals)
+  let cleaned = text
+    .replace(/[A-Z]{3}\$\s*/g, '')
+    .replace(/US\$/g, '')
+    .trim();
+
+  // Extract just the number part
+  const match = cleaned.match(/[\d,]+\.?\d*/);
+  if (!match) return null;
+
+  cleaned = match[0].replace(/,/g, '');
+  const price = parseFloat(cleaned);
+  return isNaN(price) || price <= 0 ? null : price;
 }
 
 function parseNeweggPrice(text: string): number | null {
   // Newegg shows prices like "$1,234.56" or "$1,234"
-  const cleaned = text.replace(/[^0-9.,]/g, '');
-  return parsePriceValue(cleaned);
+  const match = text.match(/\$[\d,]+\.?\d*/);
+  if (!match) return null;
+
+  const cleaned = match[0].replace(/[$,]/g, '');
+  const price = parseFloat(cleaned);
+  return isNaN(price) || price <= 0 ? null : price;
 }
 
 function parseStandardPrice(text: string): number | null {
   // Standard price format: "$1,234.56"
-  const cleaned = text.replace(/[^0-9.,]/g, '');
-  return parsePriceValue(cleaned);
-}
+  const match = text.match(/\$[\d,]+\.?\d*/);
+  if (!match) return null;
 
-function parsePriceValue(cleaned: string): number | null {
-  if (!cleaned) return null;
-
-  // Handle both comma as thousands separator and decimal separator
-  // US format: 1,234.56 -> 1234.56
-  // EU format: 1.234,56 -> 1234.56
-  if (cleaned.includes('.') && cleaned.includes(',')) {
-    const lastDot = cleaned.lastIndexOf('.');
-    const lastComma = cleaned.lastIndexOf(',');
-    if (lastComma > lastDot) {
-      // EU format: 1.234,56
-      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-    } else {
-      // US format: 1,234.56
-      cleaned = cleaned.replace(/,/g, '');
-    }
-  } else if (cleaned.includes(',')) {
-    // Could be EU decimal or US thousands
-    // Heuristic: if comma followed by exactly 2 digits, it's a decimal
-    const parts = cleaned.split(',');
-    if (parts.length === 2 && parts[1].length === 2) {
-      cleaned = cleaned.replace(',', '.');
-    } else {
-      cleaned = cleaned.replace(/,/g, '');
-    }
-  }
-
+  const cleaned = match[0].replace(/[$,]/g, '');
   const price = parseFloat(cleaned);
-  if (isNaN(price) || price <= 0) return null;
-  return price;
+  return isNaN(price) || price <= 0 ? null : price;
 }
 
 export function extractWithSelectors(html: string, url: string): SelectorResult | null {
@@ -151,19 +172,28 @@ export function extractWithSelectors(html: string, url: string): SelectorResult 
 
   // Try each selector until we find a valid price
   for (const selector of siteSelector.selectors) {
-    const element = $(selector).first();
-    if (element.length === 0) continue;
+    const elements = $(selector);
+    if (elements.length === 0) continue;
 
-    const text = element.text().trim();
-    if (!text) continue;
+    // Try all matching elements (sometimes the first one is hidden/accessibility text)
+    for (let i = 0; i < Math.min(elements.length, 5); i++) {
+      const element = elements.eq(i);
+      const text = element.text().trim();
 
-    const price = siteSelector.parsePrice(text);
-    if (price !== null && price > 0) {
-      return {
-        price,
-        confidence: 'medium',
-        source: hostname,
-      };
+      if (!text || !text.includes('$')) continue;
+
+      const price = siteSelector.parsePrice(text);
+      if (price !== null && price > 0) {
+        // Validate price is reasonable
+        const validator = siteSelector.priceValidator || PRICE_VALIDATORS.default;
+        if (validator(price)) {
+          return {
+            price,
+            confidence: 'medium',
+            source: hostname,
+          };
+        }
+      }
     }
   }
 

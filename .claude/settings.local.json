@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(/Users/apollo/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.5/skills/brainstorming/scripts/stop-server.sh /Users/apollo/Documents/github/price-tracker/.superpowers/brainstorm/53559-1773964822)",
+      "Bash(npm run:*)",
+      "Bash(npx vite:*)",
+      "Bash(docker compose:*)",
+      "Bash(psql --version)",
+      "Bash(brew services:*)",
+      "Bash(curl:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJiZjMzZmM2OS0wMDc0LTRkNzgtYTEzYS0wMzA5MTg1YjE2ODYiLCJpYXQiOjE3NzQwMTAwMjYsImV4cCI6MTc3NDAxMzYyNn0.Q2jfyhI_ZoTDcbt0Z48KL0Sdi7j7fCpqattIaRxxaH0\")",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "Bash(psql:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
+}

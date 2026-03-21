@@ -33,8 +33,8 @@ export const itemRepository = {
 
       const itemResult = await client.query<Item>(
         `INSERT INTO items (user_id, name, image_url, category)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
+        VALUES ($1, $2, $3, $4)
+        RETURNING *`,
         [userId, name, imageUrl, category]
       );
       const item = itemResult.rows[0];
@@ -43,8 +43,8 @@ export const itemRepository = {
       for (const urlData of urls) {
         const urlResult = await client.query<TrackedUrl>(
           `INSERT INTO tracked_urls (item_id, url, store_name)
-           VALUES ($1, $2, $3)
-           RETURNING *`,
+          VALUES ($1, $2, $3)
+          RETURNING *`,
           [item.id, urlData.url, urlData.storeName ?? null]
         );
         trackedUrls.push(urlResult.rows[0]);
@@ -86,12 +86,12 @@ export const itemRepository = {
          WHERE tu2.item_id = i.id AND tu2.current_price = MIN(tu.current_price)
          LIMIT 1) as best_store,
         COUNT(tu.id) as url_count
-       FROM items i
-       LEFT JOIN tracked_urls tu ON tu.item_id = i.id
-       WHERE i.user_id = $1 AND i.deleted_at IS NULL
-       GROUP BY i.id
-       ORDER BY i.created_at DESC
-       LIMIT $2 OFFSET $3`,
+      FROM items i
+      LEFT JOIN tracked_urls tu ON tu.item_id = i.id
+      WHERE i.user_id = $1 AND i.deleted_at IS NULL
+      GROUP BY i.id
+      ORDER BY i.created_at DESC
+      LIMIT $2 OFFSET $3`,
       [userId, limit + 1, offset]
     );
 
@@ -143,8 +143,8 @@ export const itemRepository = {
   ): Promise<TrackedUrl> {
     const result = await queryOne<TrackedUrl>(
       `INSERT INTO tracked_urls (item_id, url, store_name)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
+      VALUES ($1, $2, $3)
+      RETURNING *`,
       [itemId, url, storeName ?? null]
     );
     if (!result) throw new Error('Failed to add URL');
@@ -154,9 +154,9 @@ export const itemRepository = {
   async removeUrl(itemId: string, urlId: string, userId: string): Promise<boolean> {
     const result = await queryOne<TrackedUrl>(
       `DELETE FROM tracked_urls
-       WHERE id = $1 AND item_id = $2
-       AND EXISTS (SELECT 1 FROM items WHERE id = $2 AND user_id = $3)
-       RETURNING id`,
+      WHERE id = $1 AND item_id = $2
+      AND EXISTS (SELECT 1 FROM items WHERE id = $2 AND user_id = $3)
+      RETURNING id`,
       [urlId, itemId, userId]
     );
     return result !== null;
@@ -165,7 +165,7 @@ export const itemRepository = {
   async update(
     itemId: string,
     userId: string,
-    updates: { name?: string; category?: string }
+    updates: { name?: string; category?: string; imageUrl?: string }
   ): Promise<Item | null> {
     const setClauses: string[] = [];
     const values: unknown[] = [];
@@ -179,14 +179,18 @@ export const itemRepository = {
       setClauses.push(`category = $${paramIndex++}`);
       values.push(updates.category);
     }
+    if (updates.imageUrl !== undefined) {
+      setClauses.push(`image_url = $${paramIndex++}`);
+      values.push(updates.imageUrl);
+    }
 
     if (setClauses.length === 0) return null;
 
     values.push(itemId, userId);
     return queryOne<Item>(
       `UPDATE items SET ${setClauses.join(', ')}
-       WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1} AND deleted_at IS NULL
-       RETURNING *`,
+      WHERE id = $${paramIndex} AND user_id = $${paramIndex + 1} AND deleted_at IS NULL
+      RETURNING *`,
       values
     );
   },
@@ -194,8 +198,8 @@ export const itemRepository = {
   async softDelete(itemId: string, userId: string): Promise<boolean> {
     const result = await queryOne<Item>(
       `UPDATE items SET deleted_at = NOW()
-       WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
-       RETURNING id`,
+      WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+      RETURNING id`,
       [itemId, userId]
     );
     return result !== null;

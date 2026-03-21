@@ -2,12 +2,16 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { closePool } from './config/database.js';
 import { initScheduler, stopScheduler } from './jobs/scheduler.js';
+import { priceCheckService } from './services/price-check.service.js';
 
 const app = createApp();
 
 const server = app.listen(parseInt(env.PORT), () => {
   console.log(`Server running on port ${env.PORT}`);
   console.log(`Environment: ${env.NODE_ENV}`);
+
+  // Initialize the price check service (queue + external scraping)
+  priceCheckService.init();
 
   // Initialize the price check scheduler
   initScheduler();

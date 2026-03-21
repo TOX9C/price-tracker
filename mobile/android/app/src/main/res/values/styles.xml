@@ -1,0 +1,15 @@
+<resources>
+
+    <!-- Base application theme - matching amber branding -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <!-- Customize your theme here. -->
+        <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
+        <item name="android:colorPrimary">#f59e0b</item>
+        <item name="android:colorPrimaryDark">#d97706</item>
+        <item name="android:colorAccent">#f59e0b</item>
+        <item name="android:statusBarColor">#fafaf9</item>
+        <item name="android:navigationBarColor">#fafaf9</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+</resources>

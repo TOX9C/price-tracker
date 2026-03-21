@@ -2,6 +2,23 @@ import { scrapePrice, ScraperResult } from '../scrapers/index.js';
 import { priceRepository, UrlToCheck, PriceUpdate } from '../repositories/price.repository.js';
 import { itemRepository } from '../repositories/item.repository.js';
 import { notificationService } from './notification.service.js';
+import {
+  initQueue,
+  addPriceCheckJob,
+  getJobStatus,
+  checkRateLimit,
+  getQueueStats,
+  PriceCheckJob,
+  JobResult,
+  updateJobStatus,
+  getMaxConcurrency,
+} from './queue.service.js';
+import {
+  scrapeWithExternalProvider,
+  configureExternalScraping,
+  isExternalScrapingConfigured,
+} from './external-scraping.service.js';
+import { env } from '../config/env.js';
 
 export interface PriceCheckResult {
   trackedUrlId: string;
@@ -11,17 +28,169 @@ export interface PriceCheckResult {
   oldPrice: number | null;
   priceDrop: boolean;
   error?: string;
+  jobId?: string;
+}
+
+// Initialize queue and external scraping on module load
+let initialized = false;
+
+function ensureInitialized(): void {
+  if (initialized) return;
+
+  // Configure external scraping if set
+  if (env.SCRAPING_PROVIDER !== 'none' && env.SCRAPING_API_KEY) {
+    configureExternalScraping({
+      provider: env.SCRAPING_PROVIDER as 'scrapingbee' | 'scraperapi' | 'zenrows',
+      apiKey: env.SCRAPING_API_KEY,
+    });
+  }
+
+  // Initialize queue
+  initQueue();
+
+  initialized = true;
 }
 
 export const priceCheckService = {
   /**
-   * Check a single URL for price updates
+   * Initialize services
+   */
+  init(): void {
+    ensureInitialized();
+  },
+
+  /**
+   * Queue a price check for an item's URLs
+   * Returns job IDs for tracking
+   */
+  async queueItemCheck(
+    itemId: string,
+    userId: string
+ ): Promise<{ jobs: { jobId: string; url: string; storeName: string }[]; rateLimited: boolean; retryAfter?: number }> {
+    ensureInitialized();
+
+    // Check rate limit
+    const rateLimit = checkRateLimit(userId);
+    if (!rateLimit.allowed) {
+      return {
+        jobs: [],
+        rateLimited: true,
+        retryAfter: rateLimit.retryAfter,
+      };
+    }
+
+    // Get item and its URLs
+    const item = await itemRepository.findById(itemId, userId);
+    if (!item) {
+      throw new Error('Item not found');
+    }
+
+    const jobs: { jobId: string; url: string; storeName: string }[] = [];
+
+    for (const url of item.urls) {
+      const job: PriceCheckJob = {
+        trackedUrlId: url.id,
+        url: url.url,
+        itemId: item.id,
+        storeName: url.store_name || 'Unknown',
+        userId,
+        priority: 5, // Normal priority for user-triggered checks
+      };
+
+      const result = await addPriceCheckJob(job);
+      jobs.push({
+        jobId: result.jobId,
+        url: url.url,
+        storeName: url.store_name || 'Unknown',
+      });
+    }
+
+    return { jobs, rateLimited: false };
+ },
+
+ /**
+   * Queue a price check for a single URL
+   */
+ async queueUrlCheck(
+   trackedUrlId: string,
+   url: string,
+   itemId: string,
+   storeName: string | null,
+   userId: string
+ ): Promise<{ jobId: string; rateLimited: boolean; retryAfter?: number }> {
+   ensureInitialized();
+
+   // Check rate limit
+   const rateLimit = checkRateLimit(userId);
+   if (!rateLimit.allowed) {
+     return {
+       jobId: '',
+       rateLimited: true,
+       retryAfter: rateLimit.retryAfter,
+     };
+   }
+
+   const job: PriceCheckJob = {
+     trackedUrlId,
+     url,
+     itemId,
+     storeName: storeName || 'Unknown',
+     userId,
+     priority: 5,
+   };
+
+   const result = await addPriceCheckJob(job);
+   return { jobId: result.jobId, rateLimited: false };
+ },
+
+ /**
+   * Get status of a price check job
+   */
+ async getCheckStatus(jobId: string): Promise<{
+   status: 'pending' | 'processing' | 'completed' | 'failed' | 'not_found';
+   result?: JobResult;
+   error?: string;
+ }> {
+   return getJobStatus(jobId);
+ },
+
+ /**
+   * Get queue statistics
+   */
+ async getStats(): Promise<{
+   queue: {
+     waiting: number;
+     active: number;
+     completed: number;
+     failed: number;
+   };
+   maxConcurrency: number;
+   externalScraping: boolean;
+ }> {
+   const stats = await getQueueStats();
+   return {
+     queue: stats,
+     maxConcurrency: getMaxConcurrency(),
+     externalScraping: isExternalScrapingConfigured(),
+   };
+ },
+
+  /**
+   * Check a single URL for price updates (used by worker)
    */
   async checkUrl(urlToCheck: UrlToCheck): Promise<PriceCheckResult> {
     const { id: trackedUrlId, url, item_id, store_name, current_price: oldPrice } = urlToCheck;
 
     try {
-      const result: ScraperResult = await scrapePrice(url);
+      // Use external scraping provider if configured, otherwise local
+      const result: ScraperResult = isExternalScrapingConfigured()
+        ? await scrapeWithExternalProvider(url)
+        : await scrapePrice(url);
+
+      // Log if blocked
+      if (result.blocked) {
+        console.log(`[PriceCheck] URL blocked/CAPTCHA: ${url}`);
+      }
 
       if (result.extractionMethod === 'failed' || result.price === null) {
         // Update last_checked even if failed
@@ -41,7 +210,7 @@ export const priceCheckService = {
           price: null,
           oldPrice,
           priceDrop: false,
-          error: 'No price found',
+          error: result.blocked ? 'Blocked by anti-bot protection' : 'No price found',
         };
       }
 
@@ -117,7 +286,7 @@ export const priceCheckService = {
     const results: PriceCheckResult[] = [];
 
     // Process in parallel with concurrency limit
-    const batchSize = 5;
+    const batchSize = getMaxConcurrency();
     for (let i = 0; i < urls.length; i += batchSize) {
       const batch = urls.slice(i, i + batchSize);
       const batchResults = await Promise.all(
@@ -143,6 +312,8 @@ export const priceCheckService = {
     priceDrops: number;
     errors: number;
   }> {
+    ensureInitialized();
+
     const urls = await priceRepository.getUrlsForCheck(limit);
 
     if (urls.length === 0) {

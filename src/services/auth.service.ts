@@ -2,10 +2,12 @@ import { userRepository } from '../repositories/user.repository.js';
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { generateToken, generateRefreshToken } from '../middleware/auth.js';
 import { UnauthorizedError, ValidationError } from '../utils/errors.js';
+import { sendWelcomeEmail, isEmailConfigured } from './email.service.js';
 
 export interface RegisterInput {
   email: string;
   password: string;
+  name?: string;
 }
 
 export interface LoginInput {
@@ -17,6 +19,7 @@ export interface AuthResult {
   user: {
     id: string;
     email: string;
+    name?: string;
     createdAt: Date;
   };
   token: string;
@@ -36,10 +39,21 @@ export const authService = {
     const token = generateToken(user.id);
     const refreshToken = generateRefreshToken(user.id);
 
+    // Send welcome email (async, don't wait)
+    if (isEmailConfigured()) {
+      sendWelcomeEmail({
+        userEmail: user.email,
+        userName: input.name,
+      }).catch(err => {
+        console.error('[Auth] Failed to send welcome email:', err);
+      });
+    }
+
     return {
       user: {
         id: user.id,
         email: user.email,
+        name: input.name,
         createdAt: user.created_at,
       },
       token,
@@ -81,6 +95,18 @@ export const authService = {
     return {
       token: generateToken(user.id),
       refreshToken: generateRefreshToken(user.id),
+    };
+  },
+
+  async getUserById(userId: string): Promise<{ id: string; email: string; createdAt: Date } | null> {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      return null;
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      createdAt: user.created_at,
     };
   },
 };
