@@ -1,8 +1,8 @@
 {
   "name": "price-tracker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "PriceHawk Backend - Track prices across multiple stores",
+  "main": "dist/index.js",
   "directories": {
     "doc": "docs"
   },
@@ -12,9 +12,10 @@
     "start": "node dist/index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "db:migrate": "psql -d pricehawk -f src/db/migrations/001_initial_schema.sql"
+    "db:migrate": "node scripts/migrate.js",
+    "db:migrate:local": "psql -d pricehawk -f src/db/migrations/001_initial_schema.sql"
   },
-  "keywords": [],
+  "keywords": ["price-tracker", "price-alerts", "ecommerce"],
   "author": "",
   "license": "ISC",
   "type": "module",
@@ -49,5 +50,8 @@
     "ts-jest": "^29.4.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

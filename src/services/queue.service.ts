@@ -40,6 +40,69 @@ const MAX_JOBS_PER_USER_PER_DAY = 500;
 // Processing state
 let currentJobs = 0;
 const jobQueue: Array<{ job: PriceCheckJob; jobId: string }> = [];
+let workerRunning = false;
+
+// Worker function type
+type JobProcessor = (job: PriceCheckJob) => Promise<JobResult>;
+let jobProcessor: JobProcessor | null = null;
+
+/**
+ * Set the job processor function (called by price-check.service)
+ */
+export function setJobProcessor(processor: JobProcessor): void {
+  jobProcessor = processor;
+}
+
+/**
+ * Start the queue worker
+ */
+export function startWorker(): void {
+  if (workerRunning) return;
+  workerRunning = true;
+  processNextJob();
+}
+
+/**
+ * Stop the queue worker
+ */
+export function stopWorker(): void {
+  workerRunning = false;
+}
+
+/**
+ * Process next job in queue
+ */
+async function processNextJob(): Promise<void> {
+  if (!workerRunning) return;
+
+  const nextJob = getNextJob();
+  if (!nextJob) {
+    // No jobs, wait and try again
+    setTimeout(() => processNextJob(), 1000);
+    return;
+  }
+
+  const { job, jobId } = nextJob;
+
+  try {
+    updateJobStatus(jobId, 'processing');
+
+    if (!jobProcessor) {
+      throw new Error('No job processor configured');
+    }
+
+    const result = await jobProcessor(job);
+    updateJobStatus(jobId, result.success ? 'completed' : 'failed', result, result.error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    updateJobStatus(jobId, 'failed', undefined, errorMessage);
+  } finally {
+    completeJob();
+  }
+
+  // Process next job
+  setImmediate(() => processNextJob());
+}
 
 /**
  * Initialize Redis connection (optional)

@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: pricehawk-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run db:migrate && npm start
+    healthCheckPath: /api/v1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pricehawk-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SCHEDULER_ENABLED
+        value: "true"
+      - key: SCHEDULER_CRON
+        value: "0 * * * *"
+      - key: SCRAPING_PROVIDER
+        value: "none"
+      - key: MAX_JOBS_PER_USER_PER_HOUR
+        value: "100"
+      - key: MAX_JOBS_PER_USER_PER_DAY
+        value: "500"
+
+databases:
+  - name: pricehawk-db
+    region: oregon
+    plan: free

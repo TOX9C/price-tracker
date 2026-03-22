@@ -12,6 +12,8 @@ import {
   JobResult,
   updateJobStatus,
   getMaxConcurrency,
+  setJobProcessor,
+  startWorker,
 } from './queue.service.js';
 import {
   scrapeWithExternalProvider,
@@ -57,6 +59,24 @@ export const priceCheckService = {
    */
   init(): void {
     ensureInitialized();
+
+    // Set up job processor and start worker
+    setJobProcessor(async (job: PriceCheckJob): Promise<JobResult> => {
+      const urlToCheck: UrlToCheck = {
+        id: job.trackedUrlId,
+        url: job.url,
+        item_id: job.itemId,
+        store_name: job.storeName,
+        current_price: null,
+      };
+      const result = await this.checkUrl(urlToCheck);
+      return {
+        success: result.success,
+        price: result.price,
+        error: result.error,
+      };
+    });
+    startWorker();
   },
 
   /**

@@ -14,7 +14,13 @@
       "mcp__plugin_playwright_playwright__browser_navigate",
       "Bash(psql:*)",
       "Bash(npm install:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:www.koyeb.com)",
+      "WebFetch(domain:cyclic.sh)",
+      "Bash(sshpass:*)",
+      "Bash(open:*)",
+      "mcp__plugin_playwright_playwright__browser_fill_form",
+      "mcp__plugin_playwright_playwright__browser_type"
     ]
   },
   "enableAllProjectMcpServers": true,

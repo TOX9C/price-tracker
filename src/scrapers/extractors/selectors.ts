@@ -25,9 +25,7 @@ const SITE_SELECTORS: SiteSelector[] = [
   {
     patterns: [/amazon\.(com|co\.uk|de|fr|es|it|ca|com\.au)/i],
     selectors: [
-      // Primary price displays
-      '.a-price .a-offscreen',
-      '.a-price-whole',
+      // Primary price block selectors (most reliable)
       '#priceblock_ourprice',
       '#priceblock_dealprice',
       '#priceblock_saleprice',
@@ -44,11 +42,20 @@ const SITE_SELECTORS: SiteSelector[] = [
       // Buy box prices
       '#buybox .a-price .a-offscreen',
       '#newBuyBoxPrice',
-      // Fallback - get price from aria-label
+      // Price to pay in right column
+      '#托尼Price_feature_div .a-price .a-offscreen',
+      '.a-price-range .a-price .a-offscreen',
+      // Visible price elements (not accessibility text)
+      '.a-price-whole',
+      '.a-price[data-a-color="base"] .a-offscreen',
+      // Last resort - get price from aria-label
       '[aria-label*="Price"]',
       '[aria-label*="price"]',
+      // Fallback - generic price (may catch accessories)
+      '.a-price .a-offscreen',
     ],
     parsePrice: parseAmazonPrice,
+    priceValidator: (price) => price >= 20 && price <= 10000, // Filter out obvious accessories
   },
   {
     patterns: [/bestbuy\.com/i],
@@ -183,6 +190,7 @@ export function extractWithSelectors(html: string, url: string): SelectorResult 
       if (!text || !text.includes('$')) continue;
 
       const price = siteSelector.parsePrice(text);
+      console.log(`[Selectors] ${hostname} | selector: "${selector}" | text: "${text.substring(0, 30)}" | parsed: ${price}`);
       if (price !== null && price > 0) {
         // Validate price is reasonable
         const validator = siteSelector.priceValidator || PRICE_VALIDATORS.default;

@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://pricehawk-api.railway.app/api/:path*"
+      "destination": "https://publishing-remark-executives-affect.trycloudflare.com/api/:path*"
     }
   ],
   "headers": [

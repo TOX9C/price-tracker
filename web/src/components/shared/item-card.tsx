@@ -67,7 +67,7 @@ export function ItemCard({ item }: ItemCardProps) {
  )
 }
 
-function getTrend(item: Item): { direction: string; percent: string } {
+function getTrend(_item: Item): { direction: string; percent: string } {
  return {
  direction: 'stable',
  percent: '0%',
