@@ -15,7 +15,7 @@ interface UIState {
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
-      theme: 'system',
+      theme: 'light', // Default to light mode instead of system
       sidebarOpen: false,
       addItemModalOpen: false,
       setTheme: (theme) => set({ theme }),
@@ -33,10 +33,14 @@ export function initializeTheme() {
   const { theme } = useUIStore.getState()
   const root = document.documentElement
 
-  if (theme === 'system') {
+  // Always start with light mode
+  root.classList.remove('dark')
+
+  if (theme === 'dark') {
+    root.classList.add('dark')
+  } else if (theme === 'system') {
+    // If user explicitly selects system, respect it
     const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     root.classList.toggle('dark', systemDark)
-  } else {
-    root.classList.toggle('dark', theme === 'dark')
   }
 }
