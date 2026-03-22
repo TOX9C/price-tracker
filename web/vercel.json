@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://publishing-remark-executives-affect.trycloudflare.com/api/:path*"
+      "destination": "https://api.pricehawk.qzz.io/api/:path*"
     }
   ],
   "headers": [
