@@ -88,47 +88,49 @@ export const scrapeAmazon = async (url: string): Promise<ScrapedProduct> => {
     });
 
     
+    
     // Extract Price
     let priceStr = await page.evaluate(() => {
-        // Try multiple selectors
-        const priceWhole = document.querySelector('.a-price-whole');
+        // 1. Standard Amazon Buybox Price
+        const priceWhole = document.querySelector('#corePriceDisplay_desktop_feature_div .a-price-whole') || 
+                           document.querySelector('#corePrice_desktop .a-price-whole') ||
+                           document.querySelector('.a-price-whole');
+                           
         if (priceWhole) {
-            const fraction = document.querySelector('.a-price-fraction')?.textContent || '00';
+            const fraction = priceWhole.parentElement?.querySelector('.a-price-fraction')?.textContent || '00';
             return priceWhole.textContent?.trim().replace(/[^0-9]/g, '') + '.' + fraction;
         }
         
-        const offscreen = document.querySelector('.a-price .a-offscreen') || 
+        // 2. Offscreen price (usually hidden by formatting)
+        const offscreen = document.querySelector('#corePriceDisplay_desktop_feature_div .a-offscreen') || 
+                          document.querySelector('#corePrice_desktop .a-offscreen') ||
                           document.querySelector('#priceblock_ourprice');
-        return offscreen ? offscreen.textContent?.trim() : null;
+        if (offscreen) {
+             return offscreen.textContent?.trim().replace(/[^0-9\.]/g, '');
+        }
+        
+        return null;
     });
 
-    // Fallback: If price is hidden because of "Not available in location" or "See All Buying Options"
-    // we can extract it from the raw HTML text (Amazon leaves it in scripts/JSONs).
+    // Fallback: If price is hidden because of "Not available in location"
     if (!priceStr) {
         const html = await page.content();
         
-        // Sometimes listed in twister or internal JSON states as "priceAmount"
-        const amountMatches = html.match(/"priceAmount"\s*:\s*([\d\.]+)/g);
-        if (amountMatches && amountMatches.length > 0) {
-             const vals = amountMatches.map(m => parseFloat(m.match(/[\d\.]+/)[0])).filter(v => !isNaN(v));
-             if (vals.length > 0) {
-                 priceStr = Math.max(...vals).toString();
+        // Amazon embeds the exact product price inside of specific JS variables for the cart
+        const twisterMatch = html.match(/"priceAmount"\s*:\s*([\d\.]+)/) || 
+                             html.match(/"displayPrice"\s*:\s*"\$([\d\.,]+)"/);
+                             
+        if (twisterMatch && twisterMatch[1]) {
+            priceStr = twisterMatch[1].replace(/[^d\.]/g, '');
+        } else {
+             // Very strict regex: Look ONLY directly after the price strings, avoid accessories
+             const apexMatch = html.match(/class="a-offscreen">\$([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/);
+             if (apexMatch && apexMatch[1]) {
+                 priceStr = apexMatch[1].replace(/[^d\.]/g, '');
              }
         }
-        
-        // Final fallback: regex match high-value prices in the raw HTML
-        if (!priceStr) {
-            const rawPrices = html.match(/\$[1-9][\d]{0,2}(?:,[\d]{3})*\.[\d]{2}/g);
-            if (rawPrices && rawPrices.length > 0) {
-                 // For laptops/electronics, filter out cheap accessories disguised as the main price
-                 const highPrices = rawPrices.map(p => parseFloat(p.replace(/[^\d\.]/g, ''))).filter(p => p > 100);
-                 if (highPrices.length > 0) {
-                      // Take the most common price or the minimum valid price
-                      priceStr = Math.min(...highPrices).toString();
-                 }
-            }
-        }
     }
+
 
 
     // Extract Image
