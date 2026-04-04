@@ -150,14 +150,36 @@ export default function Dashboard() {
         {loading ? (
           <div
             style={{
-              textAlign: "center",
-              padding: "80px 24px",
-              background: "var(--bg-card)",
-              borderRadius: "var(--radius-lg)",
-              border: "1px solid var(--border)",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+              gap: "14px",
             }}
           >
-            <div style={{ fontSize: "16px", color: "var(--text-muted)" }}>Loading products...</div>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                style={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: "16px",
+                  height: "114px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "16px"
+                }}
+              >
+                <div className="animate-pulse" style={{ width: "64px", height: "64px", borderRadius: "var(--radius-md)", background: "var(--bg-elevated)" }} />
+                <div style={{ flex: 1 }}>
+                  <div className="animate-pulse" style={{ width: "80%", height: "16px", borderRadius: "10px", background: "var(--bg-elevated)", marginBottom: "8px" }} />
+                  <div className="animate-pulse" style={{ width: "40%", height: "14px", borderRadius: "10px", background: "var(--bg-elevated)" }} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                  <div className="animate-pulse" style={{ width: "60px", height: "20px", borderRadius: "10px", background: "var(--bg-elevated)", marginBottom: "8px" }} />
+                  <div className="animate-pulse" style={{ width: "80px", height: "14px", borderRadius: "10px", background: "var(--bg-elevated)" }} />
+                </div>
+              </div>
+            ))}
           </div>
         ) : products.length === 0 ? (
           <div
