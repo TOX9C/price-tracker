@@ -87,8 +87,9 @@ export const scrapeAmazon = async (url: string): Promise<ScrapedProduct> => {
         return titleEl ? titleEl.textContent?.trim() : null;
     });
 
+    
     // Extract Price
-    const priceStr = await page.evaluate(() => {
+    let priceStr = await page.evaluate(() => {
         // Try multiple selectors
         const priceWhole = document.querySelector('.a-price-whole');
         if (priceWhole) {
@@ -100,6 +101,35 @@ export const scrapeAmazon = async (url: string): Promise<ScrapedProduct> => {
                           document.querySelector('#priceblock_ourprice');
         return offscreen ? offscreen.textContent?.trim() : null;
     });
+
+    // Fallback: If price is hidden because of "Not available in location" or "See All Buying Options"
+    // we can extract it from the raw HTML text (Amazon leaves it in scripts/JSONs).
+    if (!priceStr) {
+        const html = await page.content();
+        
+        // Sometimes listed in twister or internal JSON states as "priceAmount"
+        const amountMatches = html.match(/"priceAmount"\s*:\s*([\d\.]+)/g);
+        if (amountMatches && amountMatches.length > 0) {
+             const vals = amountMatches.map(m => parseFloat(m.match(/[\d\.]+/)[0])).filter(v => !isNaN(v));
+             if (vals.length > 0) {
+                 priceStr = Math.max(...vals).toString();
+             }
+        }
+        
+        // Final fallback: regex match high-value prices in the raw HTML
+        if (!priceStr) {
+            const rawPrices = html.match(/\$[1-9][\d]{0,2}(?:,[\d]{3})*\.[\d]{2}/g);
+            if (rawPrices && rawPrices.length > 0) {
+                 // For laptops/electronics, filter out cheap accessories disguised as the main price
+                 const highPrices = rawPrices.map(p => parseFloat(p.replace(/[^\d\.]/g, ''))).filter(p => p > 100);
+                 if (highPrices.length > 0) {
+                      // Take the most common price or the minimum valid price
+                      priceStr = Math.min(...highPrices).toString();
+                 }
+            }
+        }
+    }
+
 
     // Extract Image
     const imageUrl = await page.evaluate(() => {
