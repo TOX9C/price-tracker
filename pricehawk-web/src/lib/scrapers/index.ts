@@ -1,8 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import UserAgent from "user-agents";
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
 
 export type Store = "AMAZON" | "WALMART" | "TARGET" | "BESTBUY" | "EBAY" | "OTHER";
 
@@ -20,9 +18,6 @@ const getRandomHeaders = () => {
     "User-Agent": userAgent.toString(),
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Cache-Control": "no-cache",
-    Pragma: "no-cache",
   };
 };
 
@@ -44,294 +39,114 @@ const detectStore = (url: string): Store => {
   return "OTHER";
 };
 
-// Vercel-compatible Puppeteer Scraper for Amazon
+// Dedicated API Scraper built for bypasses: Proxies through ScraperAPI
 export const scrapeAmazon = async (url: string): Promise<ScrapedProduct> => {
-  let browser = null;
   try {
-    // Determine if we are running in production (Vercel) or locally
-    const isLocal = process.env.NODE_ENV === "development" || !process.env.VERCEL;
+    const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY || "0c3ff44474208a0dcdbcd6e61fbd2958"; 
     
-    let executablePath = null;
-    if (!isLocal) {
-        // In Vercel, we need to use the sparticuz chromium binary
-        executablePath = await chromium.executablePath();
-    } else {
-        // Locally, try to find Chrome or fall back to standard puppeteer if installed
-        executablePath = process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' :
-                         process.platform === 'linux' ? '/usr/bin/google-chrome' :
-                         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    // ScraperAPI completely masks our Vercel IP as a US residential user allowing us 
+    // to bypass the "unshippable location" issue that was hiding the BuyBox price.
+    const targetUrl = encodeURIComponent(url);
+    const proxyUrl = `http://api.scraperapi.com?api_key=${SCRAPER_API_KEY}&url=${targetUrl}&country_code=us`;
+
+    const response = await axios.get(proxyUrl, { timeout: 30000 });
+    const html = response.data;
+    const $ = cheerio.load(html);
+
+    // Title
+    const name = $('#productTitle').text().trim() || $('h1').text().trim();
+
+    // Price
+    let priceStr: string | null = null;
+    
+    const priceWhole = $('.a-price-whole').first().text().trim();
+    if (priceWhole) {
+        const fraction = $('.a-price-fraction').first().text().trim() || '00';
+        priceStr = priceWhole.replace(/[^0-9]/g, '') + '.' + fraction.replace(/[^0-9]/g, '');
     }
 
-    browser = await puppeteer.launch({
-      args: isLocal ? ['--no-sandbox', '--disable-setuid-sandbox'] : chromium.args,
-      defaultViewport: (chromium as any).defaultViewport || { width: 1920, height: 1080 },
-      executablePath: executablePath || undefined,
-      headless: isLocal ? true : (chromium as any).headless,
-    });
-
-    const page = await browser.newPage();
-    
-    await page.setExtraHTTPHeaders({
-        'Accept-Language': 'en-US,en;q=0.9'
-    });
-    
-    // Use a realistic user agent
-    await page.setUserAgent(new UserAgent({ deviceCategory: 'desktop' }).toString());
-
-    // Go to Amazon URL and wait until the DOM is mostly loaded
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-
-    // Extract Title
-    const name = await page.evaluate(() => {
-        const titleEl = document.querySelector('#productTitle') || document.querySelector('h1');
-        return titleEl ? titleEl.textContent?.trim() : null;
-    });
-
-    
-    
-    // Extract Price
-    let priceStr = await page.evaluate(() => {
-        // 1. Standard Amazon Buybox Price
-        const priceWhole = document.querySelector('#corePriceDisplay_desktop_feature_div .a-price-whole') || 
-                           document.querySelector('#corePrice_desktop .a-price-whole') ||
-                           document.querySelector('.a-price-whole');
-                           
-        if (priceWhole) {
-            const fraction = priceWhole.parentElement?.querySelector('.a-price-fraction')?.textContent || '00';
-            return priceWhole.textContent?.trim().replace(/[^0-9]/g, '') + '.' + fraction;
-        }
-        
-        // 2. Offscreen price (usually hidden by formatting)
-        const offscreen = document.querySelector('#corePriceDisplay_desktop_feature_div .a-offscreen') || 
-                          document.querySelector('#corePrice_desktop .a-offscreen') ||
-                          document.querySelector('#priceblock_ourprice');
-        if (offscreen) {
-             return offscreen.textContent?.trim().replace(/[^0-9\.]/g, '');
-        }
-        
-        return null;
-    });
-
-    // Fallback: If price is hidden because of "Not available in location"
     if (!priceStr) {
-        const html = await page.content();
-        
-        // Amazon embeds the exact product price inside of specific JS variables for the cart
-        const twisterMatch = html.match(/"priceAmount"\s*:\s*([\d\.]+)/) || 
-                             html.match(/"displayPrice"\s*:\s*"\$([\d\.,]+)"/);
-                             
-        if (twisterMatch && twisterMatch[1]) {
-            priceStr = twisterMatch[1].replace(/[^d\.]/g, '');
+        const offscreen = $('#corePriceDisplay_desktop_feature_div .a-offscreen').first().text().trim() || 
+                          $('#priceblock_ourprice').text().trim();
+        if (offscreen) priceStr = offscreen.replace(/[^0-9\.]/g, '');
+    }
+
+    if (!priceStr) {
+        // Fallback: raw javascript object variables
+        const jsonMatches = html.match(/"priceAmount"\s*:\s*([\d\.]+)/) || html.match(/"displayPrice"\s*:\s*"[^0-9]*([\d\.,]+)"/);
+        if (jsonMatches && jsonMatches[1]) {
+             priceStr = jsonMatches[1].replace(/[^\d\.]/g, '');
         } else {
-             // Very strict regex: Look ONLY directly after the price strings, avoid accessories
              const apexMatch = html.match(/class="a-offscreen">\$([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2})/);
-             if (apexMatch && apexMatch[1]) {
-                 priceStr = apexMatch[1].replace(/[^d\.]/g, '');
-             }
+             if (apexMatch && apexMatch[1]) priceStr = apexMatch[1].replace(/[^\d\.]/g, '');
         }
     }
 
-
-
-    // Extract Image
-    const imageUrl = await page.evaluate(() => {
-        const img = document.querySelector('#landingImage') || 
-                    document.querySelector('#imgBlkFront') || 
-                    document.querySelector('img[data-old-hires]');
-        return img ? (img.getAttribute('src') || null) : null;
-    });
-
-    // Extract Availability
-    const available = await page.evaluate(() => {
-        return !document.querySelector('#outOfStock') && !document.querySelector('.availability-out-of-stock');
-    });
+    // Image
+    const imageUrl = $('#landingImage').attr('src') || $('#imgBlkFront').attr('src') || null;
+    
+    // Auth
+    const available = !$('#outOfStock').length && !$('.availability-out-of-stock').length;
 
     return {
-      name: name?.replace(/\s+/g, ' ') || "Unknown Product",
+      name: name.replace(/\s+/g, ' ') || "Unknown Product",
       price: parsePrice(priceStr),
       currency: "USD",
       imageUrl: imageUrl,
       available: available,
     };
   } catch (error) {
-    console.error("Amazon scrape error:", error);
-    // Fall back to Axios if Puppeteer crashes (unlikely but good for safety)
+    console.error("Amazon ScraperAPI error:", error);
     return scrapeGeneric(url);
-  } finally {
-    if (browser !== null) {
-      await browser.close().catch(console.error);
-    }
   }
 };
 
 // eBay scraper
 export const scrapeEbay = async (url: string): Promise<ScrapedProduct> => {
   try {
-    const response = await axios.get(url, {
-      headers: getRandomHeaders(),
-      timeout: 15000,
-    });
+    const response = await axios.get(url, { headers: getRandomHeaders(), timeout: 15000 });
     const $ = cheerio.load(response.data);
 
-    const name = $('[itemprop="name"]').text().trim() ||
-                $('#itemTitle').text().trim() ||
-                $('.x-item-title__mainTitle').text().trim() ||
-                $("h1").first().text().trim();
-
-    let price: number | null = null;
-    const priceStr = $('[itemprop="price"]').attr("content") ||
-                     $('.x-price-primary').text() ||
-                     $('#mm-saleDscPrc').text() ||
-                     $('#prcIsum').text();
-    price = parsePrice(priceStr);
-
-    const imageUrl = $('#icImg').attr("src") ||
-                     $('.zoom-viewport img').attr("src") ||
-                     $('[itemprop="image"] img').attr("src") ||
-                     null;
-
+    const name = $('[itemprop="name"]').text().trim() || $('#itemTitle').text().trim() || $("h1").first().text().trim();
+    const priceStr = $('[itemprop="price"]').attr("content") || $('.x-price-primary').text() || $('#mm-saleDscPrc').text() || $('#prcIsum').text();
+    const imageUrl = $('#icImg').attr("src") || $('.zoom-viewport img').attr("src") || null;
     const available = !$('.sold-out').length && !$('.endedListing').length;
 
-    return {
-      name: name || "Unknown Product",
-      price,
-      currency: "USD",
-      imageUrl,
-      available,
-    };
+    return { name: name || "Unknown Product", price: parsePrice(priceStr), currency: "USD", imageUrl, available };
   } catch (error) {
-    console.error("eBay scrape error:", error);
-    return { name: "Error fetching product", price: null, currency: "USD", imageUrl: null, available: false };
+    return scrapeGeneric(url);
   }
 };
 
-// Generic scraper for unknown sites - tries common patterns
 export const scrapeGeneric = async (url: string): Promise<ScrapedProduct> => {
   try {
-    const response = await axios.get(url, {
-      headers: getRandomHeaders(),
-      timeout: 15000,
-    });
+    const response = await axios.get(url, { headers: getRandomHeaders(), timeout: 15000 });
     const $ = cheerio.load(response.data);
 
-    let jsonData: { name?: string; price?: number; image?: string } = {};
-    $('script[type="application/ld+json"]').each((_, el) => {
-      try {
-        const data = JSON.parse($(el).html() || "{}");
-        if (data["@type"] === "Product" || Array.isArray(data)) {
-          const product = Array.isArray(data)
-            ? data.find((d: { "@type"?: string }) => d["@type"] === "Product")
-            : data;
-          if (product) {
-            jsonData = {
-              name: product.name,
-              price: product.offers?.price || product.price,
-              image: Array.isArray(product.image) ? product.image[0] : product.image,
-            };
-          }
-        }
-      } catch {}
-    });
+    let priceStr = $('[itemprop="price"]').attr("content") || $('.price').first().text() || $('.current-price').text();
+    const name = $('h1').first().text().trim() || "Unknown Product";
+    const imageUrl = $('[itemprop="image"] img').attr("src") || $('.product-image img').attr("src") || null;
 
-    const name =
-      jsonData.name ||
-      $('[itemprop="name"]').text().trim() ||
-      $('h1').first().text().trim() ||
-      $('.product-title').text().trim() ||
-      $('.product-name').text().trim() ||
-      $('#product-title').text().trim() ||
-      "Unknown Product";
-
-    let price: number | null = jsonData.price || null;
-    if (!price) {
-      const priceStr =
-        $('[itemprop="price"]').attr("content") ||
-        $('[itemprop="price"]').text() ||
-        $('.price').first().text() ||
-        $('.product-price').text() ||
-        $('.current-price').text() ||
-        $('#price').text();
-      price = parsePrice(priceStr);
-    }
-
-    const imageUrl =
-      jsonData.image ||
-      $('[itemprop="image"] img').attr("src") ||
-      $('.product-image img').attr("src") ||
-      $('#product-image img').attr("src") ||
-      $('img[itemprop="image"]').attr("src") ||
-      null;
-
-    const available = !$('[itemprop="availability"]').attr("content")?.includes("OutOfStock");
-
-    return {
-      name,
-      price,
-      currency: "USD",
-      imageUrl,
-      available,
-    };
+    return { name, price: parsePrice(priceStr), currency: "USD", imageUrl, available: true };
   } catch (error) {
-    console.error("Generic scrape error:", error);
     return { name: "Error fetching product", price: null, currency: "USD", imageUrl: null, available: false };
   }
 };
 
-export const scrapeWalmart = async (url: string): Promise<ScrapedProduct> => {
-  return {
-    name: "Walmart requires manual price check",
-    price: null,
-    currency: "USD",
-    imageUrl: null,
-    available: true,
-  };
-};
-
-export const scrapeTarget = async (url: string): Promise<ScrapedProduct> => {
-  return {
-    name: "Target requires manual price check",
-    price: null,
-    currency: "USD",
-    imageUrl: null,
-    available: true,
-  };
-};
-
-export const scrapeBestBuy = async (url: string): Promise<ScrapedProduct> => {
-  return {
-    name: "Best Buy requires manual price check",
-    price: null,
-    currency: "USD",
-    imageUrl: null,
-    available: true,
-  };
-};
+export const scrapeWalmart = async (url: string): Promise<ScrapedProduct> => ({ name: "Walmart requires manual check", price: null, currency: "USD", imageUrl: null, available: true });
+export const scrapeTarget = async (url: string): Promise<ScrapedProduct> => ({ name: "Target requires manual check", price: null, currency: "USD", imageUrl: null, available: true });
+export const scrapeBestBuy = async (url: string): Promise<ScrapedProduct> => ({ name: "Best Buy requires manual check", price: null, currency: "USD", imageUrl: null, available: true });
 
 export const scrapeProduct = async (url: string): Promise<{ product: ScrapedProduct; store: Store }> => {
   const store = detectStore(url);
-
   let product: ScrapedProduct;
   switch (store) {
-    case "AMAZON":
-      product = await scrapeAmazon(url);
+    case "AMAZON": product = await scrapeAmazon(url); break;
+    case "EBAY": product = await scrapeEbay(url); break;
+    case "WALMART": case "TARGET": case "BESTBUY":
+      product = { name: `Requires manual price check`, price: null, currency: "USD", imageUrl: null, available: true };
       break;
-    case "EBAY":
-      product = await scrapeEbay(url);
-      break;
-    case "WALMART":
-    case "TARGET":
-    case "BESTBUY":
-      product = {
-        name: `${store.charAt(0) + store.slice(1).toLowerCase()} requires manual price check`,
-        price: null,
-        currency: "USD",
-        imageUrl: null,
-        available: true,
-      };
-      break;
-    default:
-      product = await scrapeGeneric(url);
+    default: product = await scrapeGeneric(url);
   }
-
   return { product, store };
 };
