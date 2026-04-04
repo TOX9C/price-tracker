@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node --experimental-vm-modules node_modules/jest/bin/jest.js)",
+      "Bash(npm run:*)",
+      "Bash(npm ls:*)",
+      "Read(//Users/apollo/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.4/**)",
+      "Bash(npm:*)",
+      "Bash(/bin/zsh -c 'cd /Users/apollo/Documents/github/price-tracker/web && npm install')",
+      "Bash(npx shadcn@latest init --defaults --force)",
+      "mcp__shadcn__get_project_registries",
+      "mcp__shadcn__view_items_in_registries",
+      "mcp__shadcn__get_item_examples_from_registries",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm run:*)",
+      "Bash(cd:*)",
+      "Bash(/bin/bash -c 'mkdir -p /Users/apollo/Documents/github/price-tracker/tests/unit/scrapers /Users/apollo/Documents/github/price-tracker/tests/integration && echo \"\"SUCCESS\"\" && ls -la /Users/apollo/Documents/github/price-tracker/tests/')",
+      "Bash(echo \"FAILED with exit code $?\")",
+      "Bash(find /Users/apollo/Documents/github -name *.md -type f)",
+      "Bash(tail -c 100000 \"/Users/apollo/.claude/projects/-Users-apollo-Documents-github/a7584e97-20db-4944-829b-2a1d88edca46.jsonl\")",
+      "Bash(npx @react-native-community/cli@14 init PriceHawkTemp --directory temp-init --skip-install --version 0.73.2 --template react-native@0.73.2)",
+      "Bash(npx @react-native-community/cli@latest init PriceHawkTemp --directory temp-init --skip-install --template react-native@0.73.2)",
+      "Bash(npx:*)",
+      "Bash(pod --version)",
+      "Bash(/Users/apollo/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.5/skills/brainstorming/scripts/start-server.sh --project-dir /Users/apollo/Documents/github)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://www.jokercenter.net/computers/cpus\")",
+      "Bash(__NEW_LINE_98fa9d881f2c4fec__ echo:*)",
+      "Bash(curl -s -X POST http://localhost:3000/api/products -H \"Content-Type: application/json\" -d '{\"\"url\"\": \"\"https://www.jokercenter.net/computers/cpus\"\"}')",
+      "Bash(__NEW_LINE_fa61e636708ce89a__ echo:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://www.dx.com/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://www.miniinthebox.com/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://www.gearbest.com/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://www.lightinthebox.com/\")",
+      "Bash(curl -s http://localhost:3000/api/products)",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_snapshot"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
+}
