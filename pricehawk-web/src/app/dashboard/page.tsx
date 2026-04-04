@@ -103,6 +103,7 @@ export default function Dashboard() {
                   color: "var(--text-primary)",
                   fontFamily: "var(--font-body)",
                   transition: "border-color 0.2s",
+                  minHeight: "48px",
                 }}
                 disabled={addingUrl}
               />
@@ -117,12 +118,31 @@ export default function Dashboard() {
                   cursor: addingUrl || !url.trim() ? "not-allowed" : "pointer",
                   transition: "all 0.15s ease",
                   border: "none",
-                  padding: "13px 28px",
-                  background: addingUrl || !url.trim() ? "var(--bg-elevated)" : "var(--accent)",
-                  color: addingUrl || !url.trim() ? "var(--text-muted)" : "var(--bg-primary)",
+                  padding: "0 28px",
+                  height: "48px", // Fixed height to match input
+                  background: addingUrl ? "var(--bg-elevated)" : (url.trim() ? "var(--accent)" : "var(--bg-elevated)"),
+                  color: addingUrl ? "var(--text-muted)" : (url.trim() ? "var(--bg-primary)" : "var(--text-muted)"),
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  whiteSpace: "nowrap",
                 }}
               >
-                {addingUrl ? "Adding..." : "Track Product"}
+                {addingUrl ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{
+                      width: "14px",
+                      height: "14px",
+                      border: "2px solid var(--text-muted)",
+                      borderTopColor: "transparent",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite"
+                    }} />
+                    <span>Tracking...</span>
+                  </div>
+                ) : (
+                  "Track Product"
+                )}
               </button>
             </div>
           </form>

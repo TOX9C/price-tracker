@@ -1,6 +1,8 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import UserAgent from "user-agents";
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
 export type Store = "AMAZON" | "WALMART" | "TARGET" | "BESTBUY" | "EBAY" | "OTHER";
 
@@ -24,7 +26,7 @@ const getRandomHeaders = () => {
   };
 };
 
-const parsePrice = (priceStr: string): number | null => {
+const parsePrice = (priceStr: string | null | undefined): number | null => {
   if (!priceStr) return null;
   const cleaned = priceStr.replace(/[^0-9.,]/g, "");
   if (!cleaned) return null;
@@ -42,42 +44,91 @@ const detectStore = (url: string): Store => {
   return "OTHER";
 };
 
-// Amazon scraper
+// Vercel-compatible Puppeteer Scraper for Amazon
 export const scrapeAmazon = async (url: string): Promise<ScrapedProduct> => {
+  let browser = null;
   try {
-    const response = await axios.get(url, {
-      headers: getRandomHeaders(),
-      timeout: 15000,
+    // Determine if we are running in production (Vercel) or locally
+    const isLocal = process.env.NODE_ENV === "development" || !process.env.VERCEL;
+    
+    let executablePath = null;
+    if (!isLocal) {
+        // In Vercel, we need to use the sparticuz chromium binary
+        executablePath = await chromium.executablePath();
+    } else {
+        // Locally, try to find Chrome or fall back to standard puppeteer if installed
+        executablePath = process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' :
+                         process.platform === 'linux' ? '/usr/bin/google-chrome' :
+                         '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    }
+
+    browser = await puppeteer.launch({
+      args: isLocal ? ['--no-sandbox', '--disable-setuid-sandbox'] : chromium.args,
+      defaultViewport: (chromium as any).defaultViewport || { width: 1920, height: 1080 },
+      executablePath: executablePath || undefined,
+      headless: isLocal ? true : (chromium as any).headless,
     });
-    const $ = cheerio.load(response.data);
 
-    const name = $("#productTitle").text().trim() || $("h1").first().text().trim();
+    const page = await browser.newPage();
+    
+    await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9'
+    });
+    
+    // Use a realistic user agent
+    await page.setUserAgent(new UserAgent({ deviceCategory: 'desktop' }).toString());
 
-    let price: number | null = null;
-    const priceWhole = $(".a-price-whole").text();
-    const priceFraction = $(".a-price-fraction").text();
-    if (priceWhole) {
-      price = parseFloat(`${priceWhole.replace(/[^0-9]/g, "")}.${priceFraction || "00"}`);
-    }
-    if (!price) {
-      const priceStr = $(".a-offscreen").first().text() || $("#priceblock_ourprice").text() || $("#priceblock_dealprice").text();
-      price = parsePrice(priceStr);
-    }
+    // Go to Amazon URL and wait until the DOM is mostly loaded
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
-    const imageUrl = $("#landingImage").attr("src") || $("#imgBlkFront").attr("src") || $('img[data-old-hires]').attr("data-old-hires") || null;
+    // Extract Title
+    const name = await page.evaluate(() => {
+        const titleEl = document.querySelector('#productTitle') || document.querySelector('h1');
+        return titleEl ? titleEl.textContent?.trim() : null;
+    });
 
-    const available = !$("#outOfStock").length && !$('.availability-out-of-stock').length;
+    // Extract Price
+    const priceStr = await page.evaluate(() => {
+        // Try multiple selectors
+        const priceWhole = document.querySelector('.a-price-whole');
+        if (priceWhole) {
+            const fraction = document.querySelector('.a-price-fraction')?.textContent || '00';
+            return priceWhole.textContent?.trim().replace(/[^0-9]/g, '') + '.' + fraction;
+        }
+        
+        const offscreen = document.querySelector('.a-price .a-offscreen') || 
+                          document.querySelector('#priceblock_ourprice');
+        return offscreen ? offscreen.textContent?.trim() : null;
+    });
+
+    // Extract Image
+    const imageUrl = await page.evaluate(() => {
+        const img = document.querySelector('#landingImage') || 
+                    document.querySelector('#imgBlkFront') || 
+                    document.querySelector('img[data-old-hires]');
+        return img ? (img.getAttribute('src') || null) : null;
+    });
+
+    // Extract Availability
+    const available = await page.evaluate(() => {
+        return !document.querySelector('#outOfStock') && !document.querySelector('.availability-out-of-stock');
+    });
 
     return {
-      name: name || "Unknown Product",
-      price,
+      name: name?.replace(/\s+/g, ' ') || "Unknown Product",
+      price: parsePrice(priceStr),
       currency: "USD",
-      imageUrl,
-      available,
+      imageUrl: imageUrl,
+      available: available,
     };
   } catch (error) {
     console.error("Amazon scrape error:", error);
-    return { name: "Error fetching product", price: null, currency: "USD", imageUrl: null, available: false };
+    // Fall back to Axios if Puppeteer crashes (unlikely but good for safety)
+    return scrapeGeneric(url);
+  } finally {
+    if (browser !== null) {
+      await browser.close().catch(console.error);
+    }
   }
 };
 
@@ -90,13 +141,11 @@ export const scrapeEbay = async (url: string): Promise<ScrapedProduct> => {
     });
     const $ = cheerio.load(response.data);
 
-    // eBay product title
     const name = $('[itemprop="name"]').text().trim() ||
                 $('#itemTitle').text().trim() ||
                 $('.x-item-title__mainTitle').text().trim() ||
                 $("h1").first().text().trim();
 
-    // eBay price
     let price: number | null = null;
     const priceStr = $('[itemprop="price"]').attr("content") ||
                      $('.x-price-primary').text() ||
@@ -104,7 +153,6 @@ export const scrapeEbay = async (url: string): Promise<ScrapedProduct> => {
                      $('#prcIsum').text();
     price = parsePrice(priceStr);
 
-    // eBay image
     const imageUrl = $('#icImg').attr("src") ||
                      $('.zoom-viewport img').attr("src") ||
                      $('[itemprop="image"] img').attr("src") ||
@@ -134,7 +182,6 @@ export const scrapeGeneric = async (url: string): Promise<ScrapedProduct> => {
     });
     const $ = cheerio.load(response.data);
 
-    // Try JSON-LD structured data first (most reliable)
     let jsonData: { name?: string; price?: number; image?: string } = {};
     $('script[type="application/ld+json"]').each((_, el) => {
       try {
@@ -154,7 +201,6 @@ export const scrapeGeneric = async (url: string): Promise<ScrapedProduct> => {
       } catch {}
     });
 
-    // Product name - try multiple strategies
     const name =
       jsonData.name ||
       $('[itemprop="name"]').text().trim() ||
@@ -164,7 +210,6 @@ export const scrapeGeneric = async (url: string): Promise<ScrapedProduct> => {
       $('#product-title').text().trim() ||
       "Unknown Product";
 
-    // Price - try multiple strategies
     let price: number | null = jsonData.price || null;
     if (!price) {
       const priceStr =
@@ -177,7 +222,6 @@ export const scrapeGeneric = async (url: string): Promise<ScrapedProduct> => {
       price = parsePrice(priceStr);
     }
 
-    // Image - try multiple strategies
     const imageUrl =
       jsonData.image ||
       $('[itemprop="image"] img').attr("src") ||
@@ -201,7 +245,6 @@ export const scrapeGeneric = async (url: string): Promise<ScrapedProduct> => {
   }
 };
 
-// Stub functions for blocked sites - returns error message
 export const scrapeWalmart = async (url: string): Promise<ScrapedProduct> => {
   return {
     name: "Walmart requires manual price check",
